@@ -9,7 +9,7 @@ Personal monorepo for AI agent tooling: skills, MCP servers, Claude plugins, sys
 - `plugins/claude-plugins/` — Claude-specific plugins
 - `prompts/system/` — System prompts for AI agents
 - `prompts/templates/` — Reusable prompt templates
-- `sandbox/` — Docker sandbox templates
+- `sandbox/` — Docker Sandbox (sbx) template image, v2 kit and launcher for the `markeli-agent` bot
 - `docs/plans/` — Implementation plans and design docs
 
 ## Conventions
