@@ -55,3 +55,15 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # Surfaces the immutable sha-<short> tag so it can be copied into a kit's `image:` pin
+      # (see sandbox/README.md, "Image versioning") without digging through the GHCR package page.
+      - name: Summarize published tags
+        if: github.event_name != 'pull_request'
+        run: |
+          {
+            echo '### Published image tags'
+            echo '```'
+            echo "${{ steps.meta.outputs.tags }}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
