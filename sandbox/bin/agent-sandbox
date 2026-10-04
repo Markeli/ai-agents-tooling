@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Creates (once) and attaches to a clone-mode sandbox for a repository, running Claude Code as markeli-agent.
-# Usage: agent-sandbox [--no-attach] [REPO_PATH] [-- CLAUDE_ARGS...]
+# Usage: agent-sandbox [--no-attach] [--recreate] [REPO_PATH] [-- CLAUDE_ARGS...]
 set -euo pipefail
 
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -11,10 +11,15 @@ pull="${AGENT_SANDBOX_PULL:-missing}"
 
 repo="."
 no_attach=0
+recreate=0
 while [[ $# -gt 0 && "$1" != "--" ]]; do
 	case "$1" in
 		--no-attach)
 			no_attach=1
+			shift
+			;;
+		--recreate)
+			recreate=1
 			shift
 			;;
 		*)
@@ -50,9 +55,32 @@ bind_secret() {
 	sbx secret set "$service" --sandbox "$name" --command "/usr/bin/security find-generic-password -s $item -w" >/dev/null
 }
 
+sandbox_exists() {
+	sbx ls 2>/dev/null | awk 'NR > 1 { print $1 }' | grep -qx "$name"
+}
+
+# Clone mode adds a "sandbox-<name>" git remote to the host repo, served by a git-daemon inside the sandbox
+# (see sandbox/README.md). That lets us check for commits the sandbox has that origin doesn't, without any
+# access to the sandbox itself. It cannot see uncommitted/staged-but-not-committed changes in the sandbox's
+# working tree (git-daemon only serves refs) — recreate does not guard against losing those.
+recreate_sandbox() {
+	git -C "$repo" fetch "sandbox-$name" --quiet \
+		|| die "cannot fetch sandbox-$name; is the sandbox still running? (sbx ls)"
+	local unpushed
+	unpushed=$(git -C "$repo" rev-list --remotes="sandbox-$name" --not --remotes=origin | head -1) \
+		|| die "cannot compare sandbox-$name against origin"
+	[[ -z "$unpushed" ]] \
+		|| die "sandbox-$name has commits not pushed to origin (e.g. $unpushed); push them first, then retry --recreate"
+	sbx rm "$name"
+}
+
 ensure_bot_agent
 
-if ! sbx ls 2>/dev/null | awk 'NR > 1 { print $1 }' | grep -qx "$name"; then
+if [[ $recreate -eq 1 ]] && sandbox_exists; then
+	recreate_sandbox
+fi
+
+if ! sandbox_exists; then
 	# Sandbox-scoped secrets can exist before the sandbox; the kit's first-run approval then finds them
 	bind_secret github agent/personal-github
 	bind_secret gitlab agent/personal-gitlab
