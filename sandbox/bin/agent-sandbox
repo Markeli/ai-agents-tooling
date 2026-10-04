@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Creates (once) and attaches to a clone-mode sandbox for a repository, running Claude Code as markeli-agent.
-# Usage: agent-sandbox [REPO_PATH] [-- CLAUDE_ARGS...]
+# Usage: agent-sandbox [--no-attach] [REPO_PATH] [-- CLAUDE_ARGS...]
 set -euo pipefail
 
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -10,10 +10,19 @@ agent_key="${AGENT_SSH_KEY:-$HOME/.ssh/markeli_agent}"
 pull="${AGENT_SANDBOX_PULL:-missing}"
 
 repo="."
-if [[ $# -gt 0 && "$1" != "--" ]]; then
-	repo=$1
-	shift
-fi
+no_attach=0
+while [[ $# -gt 0 && "$1" != "--" ]]; do
+	case "$1" in
+		--no-attach)
+			no_attach=1
+			shift
+			;;
+		*)
+			repo=$1
+			shift
+			;;
+	esac
+done
 [[ "${1:-}" == "--" ]] && shift
 
 repo=$(git -C "$repo" rev-parse --show-toplevel)
@@ -48,6 +57,11 @@ if ! sbx ls 2>/dev/null | awk 'NR > 1 { print $1 }' | grep -qx "$name"; then
 	bind_secret github agent/personal-github
 	bind_secret gitlab agent/personal-gitlab
 	sbx create --clone --pull "$pull" --name "$name" "$kit" "$repo"
+fi
+
+if [[ $no_attach -eq 1 ]]; then
+	echo "agent-sandbox: $name ready (not attached)"
+	exit 0
 fi
 
 if [[ $# -eq 0 ]]; then

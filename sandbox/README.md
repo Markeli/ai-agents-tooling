@@ -8,12 +8,23 @@ agent is forwarded.
 ```text
 sandbox/
 ├── image/                  template image (ghcr.io/markeli/claude-sandbox), built by CI on main
-│   ├── Dockerfile          .NET 8/9/10, glab, csharp-ls, plugins, bot git identity
+│   ├── Dockerfile          .NET 8/9/10, Node.js LTS, glab, csharp-ls, plugins, bot git identity
 │   ├── managed-settings.json  plugins, Co-authored-by, claude.ai connectors off
 │   └── CLAUDE.md           bot rules, loaded as managed instructions
 ├── kits/markeli-claude/    v2 kit: extends built-in claude, adds network rules and the gitlab credential
 └── bin/agent-sandbox       create-once-and-attach launcher for one repository
 ```
+
+## Toolchain in the image
+
+- **.NET**: 8.0, 9.0, 10.0 SDKs, `csharp-ls`
+- **Node.js**: current LTS from NodeSource, with corepack enabled and `pnpm`/`yarn` pre-activated for the `agent`
+  user (no download/prompt on first use) — builds Docusaurus and Astro sites with npm, pnpm or yarn
+- **Source control**: `gh`, `glab`
+- **IaC / config**: `terraform`, `yq`, `ansible-core`, `ansible-lint` (the last two via `uv tool install`)
+- **CI / linting**: `actionlint`, `hadolint`, `shellcheck`, `shfmt`
+- **General purpose**: `build-essential`, `tree`, `zip`, `fd` (Debian's `fd-find`, symlinked), `sqlite3`,
+  `postgresql-client`
 
 ## One-time setup (host)
 
@@ -48,11 +59,15 @@ sandbox/
 ```bash
 sandbox/bin/agent-sandbox ~/Development/Personal/<repo>      # create once, then attach
 sandbox/bin/agent-sandbox . -- -c                            # pass extra Claude Code args
+sandbox/bin/agent-sandbox --no-attach ~/Development/Personal/<repo>   # create/ensure, don't attach
 ```
 
 The first run asks to approve the kit's credentials (`anthropic`, `github`, `gitlab`); approvals are stored in
 `~/.config/sbx/credentials.yaml`. The sandbox is named after the repository and works on a private clone; the bot
 pushes branches to `origin` over SSH. Remove it with `sbx rm <name>`.
+
+`--no-attach` creates the sandbox and binds its secrets (or confirms both already exist) without opening a shell —
+useful for pre-provisioning a sandbox or driving it from another script.
 
 ## Change the image
 

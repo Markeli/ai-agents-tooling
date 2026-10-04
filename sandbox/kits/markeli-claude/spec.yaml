@@ -15,6 +15,10 @@ permissions:
       - github.com:22
       - gitlab.com:22
       - api.nuget.org
+      # terraform init / ansible-galaxy pull providers, roles and collections from these registries;
+      # the balanced sbx policy gates both behind an approval (ghcr.io and registry.gitlab.com are already allowed)
+      - registry.terraform.io
+      - galaxy.ansible.com
 
 credentials:
   - service: gitlab
