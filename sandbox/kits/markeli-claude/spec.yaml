@@ -15,6 +15,10 @@ permissions:
       - github.com:22
       - gitlab.com:22
       - api.nuget.org
+      # dotnet-install.sh (Dockerfile .NET SDK install step) resolves the latest SDK version per channel
+      # from ci.dot.net, then downloads the actual SDK binaries from builds.dotnet.microsoft.com
+      - ci.dot.net
+      - builds.dotnet.microsoft.com
       # terraform init / ansible-galaxy pull providers, roles and collections from these registries;
       # the balanced sbx policy gates both behind an approval (ghcr.io and registry.gitlab.com are already allowed)
       - registry.terraform.io
