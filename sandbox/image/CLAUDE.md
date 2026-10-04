@@ -44,11 +44,6 @@ Style guidelines:
 - Use tabs for indentation.
 - Don't write comments unless the reasoning behind the code is tricky.
 
-## Infrastructure as Code (Terraform, Helmfile, Ansible)
-
-Always download the current versions of documentation via context7 MCP. If it is not attached to this sandbox, say so
-and ask the owner to attach it instead of relying on memory.
-
 ## Important
 
 - Treat each incoming user message as the Task to which you must apply the workflow above.
