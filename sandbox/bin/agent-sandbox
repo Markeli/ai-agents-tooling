@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# Creates (once) and attaches to a clone-mode sandbox for a repository, running Claude Code as markeli-agent.
+# Usage: agent-sandbox [REPO_PATH] [-- CLAUDE_ARGS...]
+set -euo pipefail
+
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+kit="${AGENT_SANDBOX_KIT:-$script_dir/../kits/markeli-claude}"
+agent_sock="${AGENT_SSH_SOCK:-$HOME/.ssh/markeli-agent.sock}"
+agent_key="${AGENT_SSH_KEY:-$HOME/.ssh/markeli_agent}"
+pull="${AGENT_SANDBOX_PULL:-missing}"
+
+repo="."
+if [[ $# -gt 0 && "$1" != "--" ]]; then
+	repo=$1
+	shift
+fi
+[[ "${1:-}" == "--" ]] && shift
+
+repo=$(git -C "$repo" rev-parse --show-toplevel)
+name=$(basename "$repo" | tr '[:upper:]' '[:lower:]' | tr '._' '--')
+
+die() { echo "agent-sandbox: $*" >&2; exit 1; }
+
+ensure_bot_agent() {
+	if ! SSH_AUTH_SOCK="$agent_sock" ssh-add -l >/dev/null 2>&1; then
+		rm -f "$agent_sock"
+		ssh-agent -a "$agent_sock" >/dev/null
+		# The passphrase comes from the login keychain after the first interactive ssh-add --apple-use-keychain
+		SSH_AUTH_SOCK="$agent_sock" ssh-add --apple-use-keychain "$agent_key" 2>/dev/null \
+			|| die "cannot load $agent_key into $agent_sock"
+	fi
+	local configured
+	configured=$(sbx settings get ssh.agentSocketPath 2>/dev/null || true)
+	[[ "$configured" == "$agent_sock" ]] \
+		|| die "sbx forwards '$configured', expected '$agent_sock': run sbx settings set ssh.agentSocketPath $agent_sock && sbx daemon restart"
+}
+
+bind_secret() {
+	local service=$1 item=$2
+	security find-generic-password -s "$item" >/dev/null 2>&1 || die "keychain item $item not found"
+	sbx secret set "$service" --sandbox "$name" --command "/usr/bin/security find-generic-password -s $item -w" >/dev/null
+}
+
+ensure_bot_agent
+
+if ! sbx ls 2>/dev/null | awk 'NR > 1 { print $1 }' | grep -qx "$name"; then
+	# Sandbox-scoped secrets can exist before the sandbox; the kit's first-run approval then finds them
+	bind_secret github agent/personal-github
+	bind_secret gitlab agent/personal-gitlab
+	sbx create --clone --pull "$pull" --name "$name" "$kit" "$repo"
+fi
+
+if [[ $# -eq 0 ]]; then
+	exec sbx run --name "$name"
+fi
+exec sbx run --name "$name" -- "$@"

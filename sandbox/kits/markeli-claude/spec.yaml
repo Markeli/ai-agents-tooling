@@ -1,0 +1,28 @@
+schemaVersion: "2"
+kind: sandbox
+name: markeli-claude
+displayName: Claude Code as markeli-agent
+description: Built-in Claude Code with the markeli-agent toolchain image, bot SSH pushes and GitLab API credentials
+sourceURL: https://github.com/markeli/ai-agents-tooling
+extends: claude
+
+sandbox:
+  image: ghcr.io/markeli/claude-sandbox:latest
+
+permissions:
+  network:
+    allow:
+      - github.com:22
+      - gitlab.com:22
+      - api.nuget.org
+
+credentials:
+  - service: gitlab
+    description: GitLab.com API token of markeli-agent for glab
+    apiKey:
+      name: GITLAB_TOKEN
+      proxyManaged: true
+      inject:
+        - domain: gitlab.com
+          header: PRIVATE-TOKEN
+          format: "%s"

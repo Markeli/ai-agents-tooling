@@ -15,7 +15,7 @@ plugins/          AI platform plugins
 prompts/          Prompt libraries
   system/         System prompts for AI agents
   templates/      Reusable prompt templates
-sandbox/          Docker sandbox templates and configs
+sandbox/          Docker Sandbox (sbx) image, kit and launcher for the markeli-agent bot
 docs/             Documentation
   plans/          Implementation plans and design docs
 ```
@@ -28,4 +28,5 @@ docs/             Documentation
 
 ## CI/CD
 
-The repository includes GitLab CI with SAST and Secret Detection scanning enabled.
+GitHub Actions builds `sandbox/image` and publishes `ghcr.io/markeli/claude-sandbox` on every change to `main`.
+See [sandbox/README.md](sandbox/README.md).

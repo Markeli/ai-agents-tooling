@@ -1,0 +1,13 @@
+{
+	"attribution": {
+		"commit": "Co-authored-by: Maxim Markelow <markelow.dev@gmail.com>",
+		"pr": ""
+	},
+	"enabledPlugins": {
+		"superpowers@claude-plugins-official": true,
+		"csharp-lsp@claude-plugins-official": true
+	},
+	"env": {
+		"ENABLE_CLAUDEAI_MCP_SERVERS": "false"
+	}
+}
