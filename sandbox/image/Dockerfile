@@ -150,7 +150,8 @@ COPY CLAUDE.md /etc/claude-code/CLAUDE.md
 
 # sbx mounts its shared skills store over ~/.claude/skills, so skills live in Claude Code's managed skills directory.
 # grill-me only hands over to grilling, so both are needed; the commit pin makes the content immutable.
-# Plannotator's slash commands are skills its install script would put in ~/.claude/skills.
+# Plannotator's slash commands are skills its install script would put in ~/.claude/skills. curl --create-dirs makes
+# the directories 0750, so the agent user could not read them without the chmod.
 RUN for skill in grill-me grilling; do \
 		curl -fsSL --create-dirs -o "/etc/claude-code/.claude/skills/${skill}/SKILL.md" \
 			"https://raw.githubusercontent.com/mattpocock/skills/${MATTPOCOCK_SKILLS_COMMIT}/skills/productivity/${skill}/SKILL.md"; \
@@ -158,7 +159,8 @@ RUN for skill in grill-me grilling; do \
 	&& for skill in plannotator plannotator-annotate plannotator-last plannotator-review; do \
 		curl -fsSL --create-dirs -o "/etc/claude-code/.claude/skills/${skill}/SKILL.md" \
 			"https://raw.githubusercontent.com/backnotprop/plannotator/v${PLANNOTATOR_VERSION}/apps/skills/core/${skill}/SKILL.md"; \
-	done
+	done \
+	&& chmod -R a+rX /etc/claude-code/.claude
 
 # "agent" is the base image's fixed non-root account, not a numeric id
 # hadolint ignore=DL3066
