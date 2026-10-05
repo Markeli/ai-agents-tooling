@@ -8,11 +8,11 @@ agent is forwarded.
 ```text
 sandbox/
 ├── image/                  template image (ghcr.io/markeli/claude-sandbox), built by CI on main
-│   ├── Dockerfile          .NET 8/9/10, Node.js LTS, glab, plugins, bot git identity
+│   ├── Dockerfile          .NET 8/9/10, Node.js LTS, glab, Plannotator, skills, plugins, bot git identity
 │   ├── managed-settings.json  plugins, commit/PR attribution, claude.ai connectors off
 │   ├── git-hooks/          system core.hooksPath: co-author trailers, chains to repository hooks
 │   └── CLAUDE.md           bot rules, loaded as managed instructions
-├── kits/markeli-claude/    v2 kit: extends built-in claude, adds network rules and the gitlab credential
+├── kits/markeli-claude/    v2 kit: extends built-in claude; network rules, Plannotator port, gitlab credential
 └── bin/agent-sandbox       create-once-and-attach launcher for one repository
 ```
 
@@ -24,6 +24,9 @@ sandbox/
 - **Source control**: `gh`, `glab`
 - **IaC / config**: `terraform`, `yq`, `ansible-core`, `ansible-lint` (the last two via `uv tool install`)
 - **CI / linting**: `actionlint`, `hadolint`, `shellcheck`, `shfmt`
+- **Plan review**: [Plannotator](https://github.com/backnotprop/plannotator) — the `plannotator` binary, the
+  `plannotator@plannotator` plugin and its `/plannotator-*` skills, all pinned by `PLANNOTATOR_VERSION` (see
+  [Plannotator](#plannotator))
 - **Claude Code skills**: `grill-me` (with the `grilling` skill it delegates to) from
   [mattpocock/skills](https://github.com/mattpocock/skills), pinned by `MATTPOCOCK_SKILLS_COMMIT`. They live in the
   managed skills directory `/etc/claude-code/.claude/skills`, because sbx mounts its shared skills store over
@@ -51,6 +54,28 @@ Every bot commit carries both `Co-Authored-By: Claude <noreply@anthropic.com>` a
 A repository that sets its own `core.hooksPath` (husky, lefthook) — or a global one in the `~/.gitconfig` copied
 from the host — overrides the system value; there only the `attribution` layer applies. PR/MR descriptions are
 covered only by the `attribution` layer.
+
+## Plannotator
+
+When Claude exits plan mode (or on `/plannotator-review`, `/plannotator-annotate`, `/plannotator-last`), Plannotator
+serves its review UI from inside the sandbox. The image sets `PLANNOTATOR_REMOTE=1` and `PLANNOTATOR_PORT=19432`, so it
+listens on `0.0.0.0:19432` instead of a random loopback port, and the kit publishes container port 19432 to the host.
+
+The host port is ephemeral, so several sandboxes don't collide. Find it with:
+
+```bash
+sbx ports <name>          # e.g. 127.0.0.1:53817 -> 19432/tcp; open http://127.0.0.1:53817 in the host browser
+```
+
+The URL Plannotator prints (`http://localhost:19432`) is the in-sandbox address; use the host port from `sbx ports`.
+To get a stable URL for a single sandbox, pin it with `sbx ports <name> --publish 19432:19432`. Ports are fixed at
+`sbx create`, so a sandbox created before this kit change needs `--recreate` (or that `sbx ports --publish` command).
+With one fixed port, a sandbox runs one Plannotator session at a time.
+
+Network: no extra allow rules. `PLANNOTATOR_SHARE=disabled` turns off share links, which would send plan content to
+`share.plannotator.ai` or its paste service. The release check runs in the browser, so it reaches `api.github.com`
+from the host, not from the sandbox. URL annotation tries `r.jina.ai` first and fetches the page directly when that
+is blocked; both go through the sandbox network policy.
 
 ## One-time setup (host)
 

@@ -13,6 +13,7 @@ ARG YQ_VERSION=4.54.1
 ARG ACTIONLINT_VERSION=1.7.12
 ARG HADOLINT_VERSION=2.15.1
 ARG TERRAFORM_VERSION=1.16.5
+ARG PLANNOTATOR_VERSION=0.28.2
 ARG MATTPOCOCK_SKILLS_COMMIT=f6abdeb8dd2a9be64f924ab44c7af374cb76726d
 ARG BOT_NAME=markeli-agent
 ARG BOT_EMAIL=markelow.dev+agent@gmail.com
@@ -107,6 +108,27 @@ RUN arch=$(dpkg --print-architecture) \
 	&& unzip -q -o "/tmp/${asset}" -d /usr/local/bin terraform \
 	&& rm "/tmp/${asset}" /tmp/terraform_SHA256SUMS
 
+# Plannotator release assets use x64/arm64, unlike Debian's amd64/arm64
+RUN arch=$(dpkg --print-architecture) \
+	&& case "$arch" in \
+		amd64) plannotator_arch=x64 ;; \
+		arm64) plannotator_arch=arm64 ;; \
+		*) echo "unsupported architecture: $arch" >&2; exit 1 ;; \
+	esac \
+	&& asset="plannotator-linux-${plannotator_arch}" \
+	&& digest=$(curl -fsSL "https://api.github.com/repos/backnotprop/plannotator/releases/tags/v${PLANNOTATOR_VERSION}" \
+		| jq -r --arg name "$asset" '.assets[] | select(.name == $name) | .digest' | sed 's/^sha256://') \
+	&& [ -n "$digest" ] \
+	&& curl -fsSL "https://github.com/backnotprop/plannotator/releases/download/v${PLANNOTATOR_VERSION}/${asset}" \
+		-o /usr/local/bin/plannotator \
+	&& echo "${digest}  /usr/local/bin/plannotator" | sha256sum -c - \
+	&& chmod +x /usr/local/bin/plannotator
+# Remote mode listens on 0.0.0.0 at a fixed port that the kit publishes to the host. Sharing would hand plan content
+# to share.plannotator.ai or a paste service, so it is off.
+ENV PLANNOTATOR_REMOTE=1 \
+	PLANNOTATOR_PORT=19432 \
+	PLANNOTATOR_SHARE=disabled
+
 # sbx copies the host user's git identity into ~/.gitconfig, so env vars pin the bot identity above any config file
 ENV GIT_AUTHOR_NAME=${BOT_NAME} \
 	GIT_AUTHOR_EMAIL=${BOT_EMAIL} \
@@ -128,9 +150,14 @@ COPY CLAUDE.md /etc/claude-code/CLAUDE.md
 
 # sbx mounts its shared skills store over ~/.claude/skills, so skills live in Claude Code's managed skills directory.
 # grill-me only hands over to grilling, so both are needed; the commit pin makes the content immutable.
+# Plannotator's slash commands are skills its install script would put in ~/.claude/skills.
 RUN for skill in grill-me grilling; do \
 		curl -fsSL --create-dirs -o "/etc/claude-code/.claude/skills/${skill}/SKILL.md" \
 			"https://raw.githubusercontent.com/mattpocock/skills/${MATTPOCOCK_SKILLS_COMMIT}/skills/productivity/${skill}/SKILL.md"; \
+	done \
+	&& for skill in plannotator plannotator-annotate plannotator-last plannotator-review; do \
+		curl -fsSL --create-dirs -o "/etc/claude-code/.claude/skills/${skill}/SKILL.md" \
+			"https://raw.githubusercontent.com/backnotprop/plannotator/v${PLANNOTATOR_VERSION}/apps/skills/core/${skill}/SKILL.md"; \
 	done
 
 # "agent" is the base image's fixed non-root account, not a numeric id
@@ -151,4 +178,6 @@ RUN uv tool install ansible-core \
 	&& uv tool install ansible-lint
 
 RUN claude plugin marketplace add anthropics/claude-plugins-official \
-	&& claude plugin install superpowers@claude-plugins-official
+	&& claude plugin install superpowers@claude-plugins-official \
+	&& claude plugin marketplace add "https://github.com/backnotprop/plannotator.git#v${PLANNOTATOR_VERSION}" \
+	&& claude plugin install plannotator@plannotator
