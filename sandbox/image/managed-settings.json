@@ -1,7 +1,7 @@
 {
 	"attribution": {
-		"commit": "Co-authored-by: Maxim Markelow <markelow.dev@gmail.com>",
-		"pr": ""
+		"commit": "🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nCo-authored-by: Maxim Markelow <markelow.dev@gmail.com>",
+		"pr": "🤖 Generated with [Claude Code](https://claude.com/claude-code)"
 	},
 	"enabledPlugins": {
 		"superpowers@claude-plugins-official": true,

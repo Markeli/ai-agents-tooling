@@ -1,0 +1,18 @@
+#!/bin/sh
+# Runs even with --no-verify, so every commit gets both co-author trailers whatever wrote its message. Trailers go
+# in after the repository's own hook, so that hook cannot drop them.
+hooks=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)/hooks || exit 0
+hook=$hooks/prepare-commit-msg
+if [ -x "$hook" ] && [ ! "$hook" -ef "$0" ]; then
+	"$hook" "$@" || exit
+fi
+
+# An empty message must stay empty so git still aborts the commit instead of recording one made only of trailers
+if [ -z "$(git stripspace --strip-comments <"$1")" ]; then
+	exit 0
+fi
+
+git interpret-trailers --in-place --if-exists addIfDifferent \
+	--trailer "Co-Authored-By: Claude <noreply@anthropic.com>" \
+	--trailer "Co-authored-by: Maxim Markelow <markelow.dev@gmail.com>" \
+	"$1"

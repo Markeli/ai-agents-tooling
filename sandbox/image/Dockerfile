@@ -117,6 +117,10 @@ RUN git config --system url."git@github.com:".pushInsteadOf "https://github.com/
 	&& git config --system url."git@gitlab.com:".pushInsteadOf "https://gitlab.com/" \
 	&& ssh-keyscan -t ed25519 github.com gitlab.com >> /etc/ssh/ssh_known_hosts
 
+# Adds both co-author trailers to every commit, however it is made; each other hook chains to the repository's own
+COPY git-hooks/ /etc/git-hooks/
+RUN git config --system core.hooksPath /etc/git-hooks
+
 # sbx regenerates ~/.claude/settings.json on every create; managed config under /etc/claude-code survives
 COPY managed-settings.json /etc/claude-code/managed-settings.json
 COPY CLAUDE.md /etc/claude-code/CLAUDE.md

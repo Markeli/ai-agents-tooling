@@ -9,7 +9,8 @@ agent is forwarded.
 sandbox/
 ├── image/                  template image (ghcr.io/markeli/claude-sandbox), built by CI on main
 │   ├── Dockerfile          .NET 8/9/10, Node.js LTS, glab, csharp-ls, plugins, bot git identity
-│   ├── managed-settings.json  plugins, Co-authored-by, claude.ai connectors off
+│   ├── managed-settings.json  plugins, commit/PR attribution, claude.ai connectors off
+│   ├── git-hooks/          system core.hooksPath: co-author trailers, chains to repository hooks
 │   └── CLAUDE.md           bot rules, loaded as managed instructions
 ├── kits/markeli-claude/    v2 kit: extends built-in claude, adds network rules and the gitlab credential
 └── bin/agent-sandbox       create-once-and-attach launcher for one repository
@@ -25,6 +26,27 @@ sandbox/
 - **CI / linting**: `actionlint`, `hadolint`, `shellcheck`, `shfmt`
 - **General purpose**: `build-essential`, `tree`, `zip`, `fd` (Debian's `fd-find`, symlinked), `sqlite3`,
   `postgresql-client`
+
+## Commit and PR attribution
+
+Every bot commit carries both `Co-Authored-By: Claude <noreply@anthropic.com>` and
+`Co-authored-by: Maxim Markelow <markelow.dev@gmail.com>`, and every PR/MR description the
+"🤖 Generated with [Claude Code](https://claude.com/claude-code)" line. Two layers make that happen:
+
+1. **`attribution` in `managed-settings.json`** (plus a rule in the managed `CLAUDE.md`): Claude Code's own commit and
+   PR attribution, extended with the owner's trailer. It is an instruction to the model, so it covers only commits
+   and PRs that Claude Code writes itself.
+2. **`git-hooks/` as the system `core.hooksPath`** (`/etc/git-hooks`): a `prepare-commit-msg` hook adds both trailers
+   with `git interpret-trailers --if-exists addIfDifferent`, so commits made any other way (a script's plain
+   `git commit`, `--amend`, `--no-verify`, merges, cherry-picks and rebases) get them too, exactly once. A system
+   `core.hooksPath` makes git ignore `.git/hooks`, so every other standard hook name links to `chain`, which runs
+   the repository's own hook with the same arguments, stdin and exit code; `prepare-commit-msg` runs it before
+   adding the trailers, and `push-to-checkout` falls back to git's built-in `updateInstead` behaviour. An empty
+   message is left alone, so git still aborts the commit.
+
+A repository that sets its own `core.hooksPath` (husky, lefthook) — or a global one in the `~/.gitconfig` copied
+from the host — overrides the system value; there only the `attribution` layer applies. PR/MR descriptions are
+covered only by the `attribution` layer.
 
 ## One-time setup (host)
 
