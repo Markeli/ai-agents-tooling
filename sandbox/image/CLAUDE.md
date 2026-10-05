@@ -66,6 +66,9 @@ Rules:
 - Push over SSH only. If any error occurs during any Git operation, including 401/403 from GitHub or GitLab — stop
   immediately and report the issue. Do not attempt to fix or continue automatically, and do not try other credentials.
 - Reply to review comments in their threads.
+- Keep both co-author trailers (`Co-Authored-By: Claude <noreply@anthropic.com>` and `Co-authored-by: Maxim Markelow
+  <markelow.dev@gmail.com>`) on every commit you author and the "🤖 Generated with [Claude Code]" line in every PR/MR
+  description; never remove them.
 
 ## Sandbox limits
 

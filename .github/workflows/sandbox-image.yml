@@ -6,15 +6,26 @@ on:
     paths:
       - sandbox/image/**
       - .github/workflows/sandbox-image.yml
+      - .github/scripts/sandbox-image-plan.sh
   pull_request:
     paths:
       - sandbox/image/**
       - .github/workflows/sandbox-image.yml
+      - .github/scripts/sandbox-image-plan.sh
   workflow_dispatch:
+    inputs:
+      force:
+        description: Rebuild without cache even if an image for this sandbox/image tree already exists
+        type: boolean
+        default: false
+  # Weekly rebuild without cache picks up base image and security updates the unchanged tree would never trigger
+  schedule:
+    - cron: "23 4 * * 1"
 
 concurrency:
   group: sandbox-image-${{ github.ref }}
-  cancel-in-progress: true
+  # Only PR runs are superseded by newer pushes; a main or scheduled run always finishes publishing
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   IMAGE: ghcr.io/${{ github.repository_owner }}/claude-sandbox
@@ -31,39 +42,70 @@ jobs:
 
       - uses: docker/setup-buildx-action@v4
 
+      # Fork PRs get a read-only token and no secrets, so they build without registry access
       - uses: docker/login-action@v4
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ${{ env.IMAGE }}
-          tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=sha,format=short
+      - id: plan
+        name: Decide whether to build, retag or skip
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          # Matches on.push.branches; a schedule event's payload carries no repository.default_branch
+          DEFAULT_BRANCH: main
+          SHA: ${{ github.sha }}
+          SAME_REPO: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+          FORCE: ${{ inputs.force }}
+        run: .github/scripts/sandbox-image-plan.sh
 
       - uses: docker/build-push-action@v7
+        if: steps.plan.outputs.action == 'build'
         with:
           context: sandbox/image
           platforms: linux/arm64
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          pull: true
+          no-cache: ${{ steps.plan.outputs.no_cache == 'true' }}
+          push: ${{ steps.plan.outputs.push == 'true' }}
+          tags: ${{ steps.plan.outputs.tags }}
+          labels: org.opencontainers.image.revision=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Retag the existing tree image
+        if: steps.plan.outputs.action == 'retag'
+        env:
+          TREE_TAG: ${{ steps.plan.outputs.tree_tag }}
+          TAGS: ${{ steps.plan.outputs.tags }}
+        run: |
+          args=()
+          while read -r tag; do
+            if [ "$tag" != "$TREE_TAG" ]; then
+              args+=(--tag "$tag")
+            fi
+          done <<< "$TAGS"
+          docker buildx imagetools create "${args[@]}" "$TREE_TAG"
 
       # Surfaces the immutable sha-<short> tag so it can be copied into a kit's `image:` pin
       # (see sandbox/README.md, "Image versioning") without digging through the GHCR package page.
       - name: Summarize published tags
-        if: github.event_name != 'pull_request'
+        if: steps.plan.outputs.push == 'true'
+        env:
+          ACTION: ${{ steps.plan.outputs.action }}
+          TREE_TAG: ${{ steps.plan.outputs.tree_tag }}
+          TAGS: ${{ steps.plan.outputs.tags }}
         run: |
           {
-            echo '### Published image tags'
-            echo '```'
-            echo "${{ steps.meta.outputs.tags }}"
-            echo '```'
+            if [ "$ACTION" = skip ]; then
+              echo '### Image unchanged, nothing published'
+              echo "\`$TREE_TAG\` already exists."
+            else
+              echo "### Published image tags ($ACTION)"
+              echo '```'
+              echo "$TAGS"
+              echo '```'
+            fi
           } >> "$GITHUB_STEP_SUMMARY"

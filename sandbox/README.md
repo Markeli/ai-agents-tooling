@@ -7,24 +7,80 @@ agent is forwarded.
 
 ```text
 sandbox/
-├── image/                  template image (ghcr.io/markeli/claude-sandbox), built by CI on main
-│   ├── Dockerfile          .NET 8/9/10, Node.js LTS, glab, csharp-ls, plugins, bot git identity
-│   ├── managed-settings.json  plugins, Co-authored-by, claude.ai connectors off
+├── image/                  template image (ghcr.io/markeli/claude-sandbox), built by CI
+│   ├── Dockerfile          .NET 8/9/10, Node.js LTS, glab, Plannotator, skills, plugins, bot git identity
+│   ├── managed-settings.json  plugins, commit/PR attribution, claude.ai connectors off
+│   ├── git-hooks/          system core.hooksPath: co-author trailers, chains to repository hooks
 │   └── CLAUDE.md           bot rules, loaded as managed instructions
-├── kits/markeli-claude/    v2 kit: extends built-in claude, adds network rules and the gitlab credential
+├── kits/markeli-claude/    v2 kit: extends built-in claude; network rules, Plannotator port, gitlab credential
 └── bin/agent-sandbox       create-once-and-attach launcher for one repository
 ```
 
 ## Toolchain in the image
 
-- **.NET**: 8.0, 9.0, 10.0 SDKs, `csharp-ls`
+- **.NET**: 8.0, 9.0, 10.0 SDKs
 - **Node.js**: current LTS from NodeSource, with corepack enabled and `pnpm`/`yarn` pre-activated for the `agent`
   user (no download/prompt on first use) — builds Docusaurus and Astro sites with npm, pnpm or yarn
 - **Source control**: `gh`, `glab`
 - **IaC / config**: `terraform`, `yq`, `ansible-core`, `ansible-lint` (the last two via `uv tool install`)
 - **CI / linting**: `actionlint`, `hadolint`, `shellcheck`, `shfmt`
+- **Plan review**: [Plannotator](https://github.com/backnotprop/plannotator) — the `plannotator` binary, the
+  `plannotator@plannotator` plugin and its `/plannotator-*` skills, all pinned by `PLANNOTATOR_VERSION` (see
+  [Plannotator](#plannotator))
+- **Claude Code skills**: `grill-me` (with the `grilling` skill it delegates to) from
+  [mattpocock/skills](https://github.com/mattpocock/skills), pinned by `MATTPOCOCK_SKILLS_COMMIT`. They live in the
+  managed skills directory `/etc/claude-code/.claude/skills`, because sbx mounts its shared skills store over
+  `~/.claude/skills` and would hide anything baked there.
 - **General purpose**: `build-essential`, `tree`, `zip`, `fd` (Debian's `fd-find`, symlinked), `sqlite3`,
   `postgresql-client`
+
+## Commit and PR attribution
+
+Every bot commit carries both `Co-Authored-By: Claude <noreply@anthropic.com>` and
+`Co-authored-by: Maxim Markelow <markelow.dev@gmail.com>`, and every PR/MR description the
+"🤖 Generated with [Claude Code](https://claude.com/claude-code)" line. Two layers make that happen:
+
+1. **`attribution` in `managed-settings.json`** (plus a rule in the managed `CLAUDE.md`): Claude Code's own commit and
+   PR attribution, extended with the owner's trailer. It is an instruction to the model, so it covers only commits
+   and PRs that Claude Code writes itself.
+2. **`git-hooks/` as the system `core.hooksPath`** (`/etc/git-hooks`): a `prepare-commit-msg` hook adds both trailers
+   with `git interpret-trailers --if-exists addIfDifferent`, so commits made any other way (a script's plain
+   `git commit`, `--amend`, `--no-verify`, merges, cherry-picks and rebases) get them too, exactly once. It does so
+   only when the commit being created is authored by the bot (`markelow.dev+agent@gmail.com`): amending,
+   cherry-picking or rebasing someone else's commit keeps that commit's author and leaves its message alone. git
+   exports the new commit's author to the hook, except for the picks and fixups that cherry-pick and rebase commit
+   in-process; there the hook reads the author of `CHERRY_PICK_HEAD` (pick) or `HEAD` (fixup) instead. `rebase
+   --apply` never runs the hook. A system
+   `core.hooksPath` makes git ignore `.git/hooks`, so every other standard hook name links to `chain`, which runs
+   the repository's own hook with the same arguments, stdin and exit code; `prepare-commit-msg` runs it before
+   adding the trailers, and `push-to-checkout` falls back to git's built-in `updateInstead` behaviour. An empty
+   message is left alone, so git still aborts the commit.
+
+A repository that sets its own `core.hooksPath` (husky, lefthook) — or a global one in the `~/.gitconfig` copied
+from the host — overrides the system value; there only the `attribution` layer applies. PR/MR descriptions are
+covered only by the `attribution` layer.
+
+## Plannotator
+
+When Claude exits plan mode (or on `/plannotator-review`, `/plannotator-annotate`, `/plannotator-last`), Plannotator
+serves its review UI from inside the sandbox. The image sets `PLANNOTATOR_REMOTE=1` and `PLANNOTATOR_PORT=19432`, so it
+listens on `0.0.0.0:19432` instead of a random loopback port, and the kit publishes container port 19432 to the host.
+
+The host port is ephemeral, so several sandboxes don't collide. Find it with:
+
+```bash
+sbx ports <name>          # e.g. 127.0.0.1:53817 -> 19432/tcp; open http://127.0.0.1:53817 in the host browser
+```
+
+The URL Plannotator prints (`http://localhost:19432`) is the in-sandbox address; use the host port from `sbx ports`.
+To get a stable URL for a single sandbox, pin it with `sbx ports <name> --publish 19432:19432`. Ports are fixed at
+`sbx create`, so a sandbox created before this kit change needs `--recreate` (or that `sbx ports --publish` command).
+With one fixed port, a sandbox runs one Plannotator session at a time.
+
+Network: no extra allow rules. `PLANNOTATOR_SHARE=disabled` turns off share links, which would send plan content to
+`share.plannotator.ai` or its paste service. The release check runs in the browser, so it reaches `api.github.com`
+from the host, not from the sandbox. URL annotation tries `r.jina.ai` first and fetches the page directly when that
+is blocked; both go through the sandbox network policy.
 
 ## One-time setup (host)
 
@@ -91,7 +147,16 @@ each other.
 ## Image versioning
 
 CI publishes two tags on every push to `main` (see `.github/workflows/sandbox-image.yml`): a moving `latest` and an
-immutable `sha-<short>` pinned to the commit that built it. The kit (`sandbox/kits/markeli-claude/spec.yaml`)
+immutable `sha-<short>` pinned to the commit that built it.
+
+Every image is also tagged `tree-<hash>`, the git tree hash of `sandbox/image` (`git rev-parse HEAD:sandbox/image`),
+so identical content is built once. A PR from a branch of this repository builds and pushes only `tree-<hash>`, and
+skips the build when that tag already exists; a fork PR builds without pushing. On `main`, an existing `tree-<hash>`
+(usually from the PR) is retagged to `latest` and `sha-<short>` with `docker buildx imagetools create`, without a
+rebuild; otherwise all three tags are built. A weekly scheduled run and a manual run with `force` rebuild without
+cache to pick up base image and security updates. They move `latest` and `tree-<hash>`, but write `sha-<short>`
+only if that commit has none yet, so a pinned `sha-<short>` never changes. The decision logic is
+`.github/scripts/sandbox-image-plan.sh`. The kit (`sandbox/kits/markeli-claude/spec.yaml`)
 references `latest` — the simplest option, and the one `agent-sandbox` already assumes with its `--pull missing`
 default (below).
 

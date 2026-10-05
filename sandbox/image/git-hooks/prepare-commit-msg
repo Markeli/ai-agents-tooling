@@ -1,0 +1,38 @@
+#!/bin/sh
+# Runs even with --no-verify, so every bot commit gets both co-author trailers whatever wrote its message. Trailers go
+# in after the repository's own hook, so that hook cannot drop them.
+hooks=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)/hooks || exit 0
+hook=$hooks/prepare-commit-msg
+if [ -x "$hook" ] && [ ! "$hook" -ef "$0" ]; then
+	"$hook" "$@" || exit
+fi
+
+# An empty message must stay empty so git still aborts the commit instead of recording one made only of trailers
+if [ -z "$(git stripspace --strip-comments <"$1")" ]; then
+	exit 0
+fi
+
+# Only the bot's own commits credit Claude and the owner, not someone else's commit that the bot amends, cherry-picks
+# or rebases. git commit exports the new commit's author to this hook, but the picks and fixups that cherry-pick and
+# rebase commit in-process (source "message") leave the image's bot identity in place. Those keep the author of the
+# picked commit (CHERRY_PICK_HEAD) or, for a fixup, of the commit it amends (HEAD).
+bot=markelow.dev+agent@gmail.com
+author=$(git var GIT_AUTHOR_IDENT 2>/dev/null | sed -n 's/^.*<\(.*\)>.*$/\1/p')
+if [ "$author" = "$bot" ] && [ "$2" = message ]; then
+	done_list=$(git rev-parse --git-path rebase-merge/done)
+	if git rev-parse -q --verify CHERRY_PICK_HEAD >/dev/null; then
+		author=$(git log -1 --format=%ae CHERRY_PICK_HEAD)
+	elif [ -f "$done_list" ] && tail -n 1 "$done_list" | grep -Eq '^(f|fixup|s|squash) '; then
+		author=$(git log -1 --format=%ae HEAD)
+	fi
+fi
+if [ "$author" != "$bot" ]; then
+	exit 0
+fi
+
+claude="Co-Authored-By: Claude <noreply@anthropic.com>"
+owner="Co-authored-by: Maxim Markelow <markelow.dev@gmail.com>"
+# A squash joins several messages that may each end in these trailers; drop the copies so they appear once, at the end
+grep -vxF -e "$claude" -e "$owner" "$1" >"$1.tmp"
+mv "$1.tmp" "$1"
+git interpret-trailers --in-place --if-exists addIfDifferent --trailer "$claude" --trailer "$owner" "$1"
