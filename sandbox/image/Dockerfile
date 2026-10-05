@@ -51,7 +51,7 @@ RUN export DEBIAN_FRONTEND=noninteractive \
 	&& rm -rf /var/lib/apt/lists/*
 
 RUN curl -fsSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh \
-	&& for channel in ${DOTNET_CHANNELS}; do bash /tmp/dotnet-install.sh --channel "$channel" --install-dir /usr/share/dotnet; done \
+	&& for channel in ${DOTNET_CHANNELS}; do bash /tmp/dotnet-install.sh --channel "$channel" --install-dir /usr/share/dotnet || exit; done \
 	&& ln -sf /usr/share/dotnet/dotnet /usr/local/bin/dotnet \
 	&& rm /tmp/dotnet-install.sh
 ENV DOTNET_ROOT=/usr/share/dotnet \
