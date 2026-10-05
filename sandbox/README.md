@@ -80,11 +80,12 @@ sandbox/bin/agent-sandbox --name blog-1 ~/Development/Personal/markeli.github.io
 sandbox/bin/agent-sandbox --name blog-2 ~/Development/Personal/markeli.github.io
 ```
 
-`NAME` must be lowercase letters, digits and hyphens only; it replaces the repo-derived default everywhere a
-sandbox is keyed by name — sandbox-scoped secrets, `sbx create`, `--recreate`'s `sandbox-<name>` remote,
-`--no-attach`, and attach. Each named sandbox is its own independent clone with its own `sandbox-<name>` remote on
-the host (see "Update or recreate a sandbox"); use a separate branch per sandbox so they don't push over each
-other.
+`NAME` must be lowercase letters, digits and hyphens, starting with a letter or digit (so a slip like
+`--name --recreate` is rejected instead of naming a sandbox `--recreate`); it replaces the repo-derived default
+everywhere a sandbox is keyed by name — sandbox-scoped secrets, `sbx create`, `--recreate`'s `sandbox-<name>`
+remote, `--no-attach`, and attach. Each named sandbox is its own independent clone with its own `sandbox-<name>`
+remote on the host (see "Update or recreate a sandbox"); use a separate branch per sandbox so they don't push over
+each other.
 
 ## Image versioning
 
