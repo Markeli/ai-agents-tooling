@@ -7,7 +7,7 @@ agent is forwarded.
 
 ```text
 sandbox/
-├── image/                  template image (ghcr.io/markeli/claude-sandbox), built by CI on main
+├── image/                  template image (ghcr.io/markeli/claude-sandbox), built by CI
 │   ├── Dockerfile          .NET 8/9/10, Node.js LTS, glab, Plannotator, skills, plugins, bot git identity
 │   ├── managed-settings.json  plugins, commit/PR attribution, claude.ai connectors off
 │   ├── git-hooks/          system core.hooksPath: co-author trailers, chains to repository hooks
@@ -129,7 +129,16 @@ useful for pre-provisioning a sandbox or driving it from another script.
 ## Image versioning
 
 CI publishes two tags on every push to `main` (see `.github/workflows/sandbox-image.yml`): a moving `latest` and an
-immutable `sha-<short>` pinned to the commit that built it. The kit (`sandbox/kits/markeli-claude/spec.yaml`)
+immutable `sha-<short>` pinned to the commit that built it.
+
+Every image is also tagged `tree-<hash>`, the git tree hash of `sandbox/image` (`git rev-parse HEAD:sandbox/image`),
+so identical content is built once. A PR from a branch of this repository builds and pushes only `tree-<hash>`, and
+skips the build when that tag already exists; a fork PR builds without pushing. On `main`, an existing `tree-<hash>`
+(usually from the PR) is retagged to `latest` and `sha-<short>` with `docker buildx imagetools create`, without a
+rebuild; otherwise all three tags are built. A weekly scheduled run and a manual run with `force` rebuild without
+cache to pick up base image and security updates. They move `latest` and `tree-<hash>`, but write `sha-<short>`
+only if that commit has none yet, so a pinned `sha-<short>` never changes. The decision logic is
+`.github/scripts/sandbox-image-plan.sh`. The kit (`sandbox/kits/markeli-claude/spec.yaml`)
 references `latest` — the simplest option, and the one `agent-sandbox` already assumes with its `--pull missing`
 default (below).
 
