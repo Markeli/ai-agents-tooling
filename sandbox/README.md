@@ -24,6 +24,10 @@ sandbox/
 - **Source control**: `gh`, `glab`
 - **IaC / config**: `terraform`, `yq`, `ansible-core`, `ansible-lint` (the last two via `uv tool install`)
 - **CI / linting**: `actionlint`, `hadolint`, `shellcheck`, `shfmt`
+- **Claude Code skills**: `grill-me` (with the `grilling` skill it delegates to) from
+  [mattpocock/skills](https://github.com/mattpocock/skills), pinned by `MATTPOCOCK_SKILLS_COMMIT`. They live in the
+  managed skills directory `/etc/claude-code/.claude/skills`, because sbx mounts its shared skills store over
+  `~/.claude/skills` and would hide anything baked there.
 - **General purpose**: `build-essential`, `tree`, `zip`, `fd` (Debian's `fd-find`, symlinked), `sqlite3`,
   `postgresql-client`
 

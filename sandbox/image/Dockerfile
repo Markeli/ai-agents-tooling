@@ -13,6 +13,7 @@ ARG YQ_VERSION=4.54.1
 ARG ACTIONLINT_VERSION=1.7.12
 ARG HADOLINT_VERSION=2.15.1
 ARG TERRAFORM_VERSION=1.16.5
+ARG MATTPOCOCK_SKILLS_COMMIT=f6abdeb8dd2a9be64f924ab44c7af374cb76726d
 ARG BOT_NAME=markeli-agent
 ARG BOT_EMAIL=markelow.dev+agent@gmail.com
 
@@ -124,6 +125,13 @@ RUN git config --system core.hooksPath /etc/git-hooks
 # sbx regenerates ~/.claude/settings.json on every create; managed config under /etc/claude-code survives
 COPY managed-settings.json /etc/claude-code/managed-settings.json
 COPY CLAUDE.md /etc/claude-code/CLAUDE.md
+
+# sbx mounts its shared skills store over ~/.claude/skills, so skills live in Claude Code's managed skills directory.
+# grill-me only hands over to grilling, so both are needed; the commit pin makes the content immutable.
+RUN for skill in grill-me grilling; do \
+		curl -fsSL --create-dirs -o "/etc/claude-code/.claude/skills/${skill}/SKILL.md" \
+			"https://raw.githubusercontent.com/mattpocock/skills/${MATTPOCOCK_SKILLS_COMMIT}/skills/productivity/${skill}/SKILL.md"; \
+	done
 
 # "agent" is the base image's fixed non-root account, not a numeric id
 # hadolint ignore=DL3066
