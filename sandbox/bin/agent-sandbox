@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Creates (once) and attaches to a clone-mode sandbox for a repository, running Claude Code as markeli-agent.
-# Usage: agent-sandbox [--no-attach] [--recreate] [REPO_PATH] [-- CLAUDE_ARGS...]
+# Usage: agent-sandbox [--no-attach] [--recreate] [--name NAME] [REPO_PATH] [-- CLAUDE_ARGS...]
 set -euo pipefail
 
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -12,6 +12,10 @@ pull="${AGENT_SANDBOX_PULL:-missing}"
 repo="."
 no_attach=0
 recreate=0
+name=""
+
+die() { echo "agent-sandbox: $*" >&2; exit 1; }
+
 while [[ $# -gt 0 && "$1" != "--" ]]; do
 	case "$1" in
 		--no-attach)
@@ -22,6 +26,11 @@ while [[ $# -gt 0 && "$1" != "--" ]]; do
 			recreate=1
 			shift
 			;;
+		--name)
+			[[ $# -ge 2 ]] || die "--name requires an argument"
+			name=$2
+			shift 2
+			;;
 		*)
 			repo=$1
 			shift
@@ -31,9 +40,8 @@ done
 [[ "${1:-}" == "--" ]] && shift
 
 repo=$(git -C "$repo" rev-parse --show-toplevel)
-name=$(basename "$repo" | tr '[:upper:]' '[:lower:]' | tr '._' '--')
-
-die() { echo "agent-sandbox: $*" >&2; exit 1; }
+[[ -n "$name" ]] || name=$(basename "$repo" | tr '[:upper:]' '[:lower:]' | tr '._' '--')
+[[ "$name" =~ ^[a-z0-9-]+$ ]] || die "invalid sandbox name '$name': use lowercase letters, digits and hyphens only"
 
 ensure_bot_agent() {
 	if ! SSH_AUTH_SOCK="$agent_sock" ssh-add -l >/dev/null 2>&1; then
