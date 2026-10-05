@@ -28,6 +28,7 @@ while [[ $# -gt 0 && "$1" != "--" ]]; do
 			;;
 		--name)
 			[[ $# -ge 2 ]] || die "--name requires an argument"
+			[[ -n "$2" ]] || die "--name must not be empty; omit --name to use the repo-derived name"
 			name=$2
 			shift 2
 			;;
@@ -55,7 +56,8 @@ ensure_bot_agent() {
 	local configured
 	configured=$(sbx settings get ssh.agentSocketPath 2>/dev/null || true)
 	[[ "$configured" == "$agent_sock" ]] \
-		|| die "sbx forwards '$configured', expected '$agent_sock': run sbx settings set ssh.agentSocketPath $agent_sock && sbx daemon restart"
+		|| die "sbx forwards '$configured', expected '$agent_sock':" \
+			"run sbx settings set ssh.agentSocketPath $agent_sock && sbx daemon restart"
 }
 
 bind_secret() {
