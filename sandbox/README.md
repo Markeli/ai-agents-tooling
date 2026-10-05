@@ -45,7 +45,12 @@ Every bot commit carries both `Co-Authored-By: Claude <noreply@anthropic.com>` a
    and PRs that Claude Code writes itself.
 2. **`git-hooks/` as the system `core.hooksPath`** (`/etc/git-hooks`): a `prepare-commit-msg` hook adds both trailers
    with `git interpret-trailers --if-exists addIfDifferent`, so commits made any other way (a script's plain
-   `git commit`, `--amend`, `--no-verify`, merges, cherry-picks and rebases) get them too, exactly once. A system
+   `git commit`, `--amend`, `--no-verify`, merges, cherry-picks and rebases) get them too, exactly once. It does so
+   only when the commit being created is authored by the bot (`markelow.dev+agent@gmail.com`): amending,
+   cherry-picking or rebasing someone else's commit keeps that commit's author and leaves its message alone. git
+   exports the new commit's author to the hook, except for the picks and fixups that cherry-pick and rebase commit
+   in-process; there the hook reads the author of `CHERRY_PICK_HEAD` (pick) or `HEAD` (fixup) instead. `rebase
+   --apply` never runs the hook. A system
    `core.hooksPath` makes git ignore `.git/hooks`, so every other standard hook name links to `chain`, which runs
    the repository's own hook with the same arguments, stdin and exit code; `prepare-commit-msg` runs it before
    adding the trailers, and `push-to-checkout` falls back to git's built-in `updateInstead` behaviour. An empty
