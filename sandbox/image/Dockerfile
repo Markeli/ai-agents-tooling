@@ -129,7 +129,7 @@ COPY CLAUDE.md /etc/claude-code/CLAUDE.md
 # hadolint ignore=DL3066
 USER agent
 
-RUN dotnet tool install --global csharp-ls
+# Keeps `dotnet tool install --global` tools on PATH for the agent
 ENV PATH="/home/agent/.dotnet/tools:${PATH}"
 
 # Pre-fetches pnpm/yarn into the agent's corepack cache; pnpm --version also triggers its one-time native binary
@@ -143,5 +143,4 @@ RUN uv tool install ansible-core \
 	&& uv tool install ansible-lint
 
 RUN claude plugin marketplace add anthropics/claude-plugins-official \
-	&& claude plugin install superpowers@claude-plugins-official \
-	&& claude plugin install csharp-lsp@claude-plugins-official
+	&& claude plugin install superpowers@claude-plugins-official

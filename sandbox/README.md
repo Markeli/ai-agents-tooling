@@ -8,7 +8,7 @@ agent is forwarded.
 ```text
 sandbox/
 ├── image/                  template image (ghcr.io/markeli/claude-sandbox), built by CI on main
-│   ├── Dockerfile          .NET 8/9/10, Node.js LTS, glab, csharp-ls, plugins, bot git identity
+│   ├── Dockerfile          .NET 8/9/10, Node.js LTS, glab, plugins, bot git identity
 │   ├── managed-settings.json  plugins, commit/PR attribution, claude.ai connectors off
 │   ├── git-hooks/          system core.hooksPath: co-author trailers, chains to repository hooks
 │   └── CLAUDE.md           bot rules, loaded as managed instructions
@@ -18,7 +18,7 @@ sandbox/
 
 ## Toolchain in the image
 
-- **.NET**: 8.0, 9.0, 10.0 SDKs, `csharp-ls`
+- **.NET**: 8.0, 9.0, 10.0 SDKs
 - **Node.js**: current LTS from NodeSource, with corepack enabled and `pnpm`/`yarn` pre-activated for the `agent`
   user (no download/prompt on first use) — builds Docusaurus and Astro sites with npm, pnpm or yarn
 - **Source control**: `gh`, `glab`

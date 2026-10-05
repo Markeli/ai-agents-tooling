@@ -4,8 +4,7 @@
 		"pr": "🤖 Generated with [Claude Code](https://claude.com/claude-code)"
 	},
 	"enabledPlugins": {
-		"superpowers@claude-plugins-official": true,
-		"csharp-lsp@claude-plugins-official": true
+		"superpowers@claude-plugins-official": true
 	},
 	"env": {
 		"ENABLE_CLAUDEAI_MCP_SERVERS": "false"
