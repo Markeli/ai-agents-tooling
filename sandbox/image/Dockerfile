@@ -7,7 +7,7 @@ LABEL org.opencontainers.image.source="https://github.com/markeli/ai-agents-tool
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 ARG GLAB_VERSION=1.119.0
-ARG DOTNET_CHANNELS="8.0 9.0 10.0"
+ARG DOTNET_CHANNELS="9.0 10.0"
 ARG NODE_MAJOR=24
 ARG YQ_VERSION=4.54.1
 ARG ACTIONLINT_VERSION=1.7.12
@@ -183,7 +183,9 @@ RUN uv tool install ansible-core \
 
 RUN dotnet tool install --global csharp-ls --version "${CSHARP_LS_VERSION}"
 
-RUN claude plugin marketplace add anthropics/claude-plugins-official \
+# The plannotator repository is large enough to exceed the default 120 s clone timeout on a slow link
+RUN export CLAUDE_CODE_PLUGIN_GIT_TIMEOUT_MS=600000 \
+	&& claude plugin marketplace add anthropics/claude-plugins-official \
 	&& for plugin in superpowers csharp-lsp typescript-lsp microsoft-docs security-guidance pr-review-toolkit; do \
 		claude plugin install "${plugin}@claude-plugins-official" || exit; \
 	done \
@@ -200,4 +202,5 @@ RUN uv venv "${SECURITY_WARNINGS_STATE_DIR}/agent-sdk-venv" --python /usr/bin/py
 # Last on purpose: these files change most often, and COPY ignores USER, so they stay root-owned.
 COPY managed-settings.json /etc/claude-code/managed-settings.json
 COPY CLAUDE.md /etc/claude-code/CLAUDE.md
+COPY rules/ /etc/claude-code/rules/
 COPY templates/ /etc/claude-code/templates/
