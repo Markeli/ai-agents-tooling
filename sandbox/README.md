@@ -8,25 +8,37 @@ agent is forwarded.
 ```text
 sandbox/
 ├── image/                  template image (ghcr.io/markeli/claude-sandbox), built by CI
-│   ├── Dockerfile          .NET 8/9/10, Node.js LTS, glab, Plannotator, skills, plugins, bot git identity
+│   ├── Dockerfile          .NET 9/10, Node.js LTS, glab, Plannotator, skills, plugins, bot git identity
 │   ├── managed-settings.json  plugins, commit/PR attribution, claude.ai connectors off
 │   ├── git-hooks/          system core.hooksPath: co-author trailers, chains to repository hooks
-│   └── CLAUDE.md           bot rules, loaded as managed instructions
+│   ├── CLAUDE.md           bot rules entry point, loaded as managed instructions
+│   ├── rules/              topic rules the entry point tells the bot to read on demand
+│   └── templates/          spec and ADR templates (/etc/claude-code/templates)
 ├── kits/markeli-claude/    v2 kit: extends built-in claude; network rules, Plannotator port, gitlab credential
 └── bin/agent-sandbox       create-once-and-attach launcher for one repository
 ```
 
 ## Toolchain in the image
 
-- **.NET**: 8.0, 9.0, 10.0 SDKs
+- **.NET**: 9.0, 10.0 SDKs (no .NET 8: `net8.0` tests run in CI only), `csharp-ls` (global dotnet tool,
+  pinned by `CSHARP_LS_VERSION`)
 - **Node.js**: current LTS from NodeSource, with corepack enabled and `pnpm`/`yarn` pre-activated for the `agent`
-  user (no download/prompt on first use) — builds Docusaurus and Astro sites with npm, pnpm or yarn
+  user (no download/prompt on first use) — builds Docusaurus and Astro sites with npm, pnpm or yarn;
+  global `typescript-language-server` with TypeScript 6 (TypeScript 7 is the native compiler without `tsserver`)
 - **Source control**: `gh`, `glab`
 - **IaC / config**: `terraform`, `yq`, `ansible-core`, `ansible-lint` (the last two via `uv tool install`)
 - **CI / linting**: `actionlint`, `hadolint`, `shellcheck`, `shfmt`
 - **Plan review**: [Plannotator](https://github.com/backnotprop/plannotator) — the `plannotator` binary, the
   `plannotator@plannotator` plugin and its `/plannotator-*` skills, all pinned by `PLANNOTATOR_VERSION` (see
   [Plannotator](#plannotator))
+- **Claude Code plugins** from `claude-plugins-official`, enabled in `managed-settings.json`:
+  - `superpowers` — brainstorming → plan → TDD → debugging → verification workflow
+  - `csharp-lsp`, `typescript-lsp` — wire `csharp-ls` and `typescript-language-server` into Claude's LSP tool
+  - `microsoft-docs` — Microsoft Learn MCP server (`learn.microsoft.com`, allowed in the kit)
+  - `security-guidance` — pattern warnings on edits plus an LLM review of the diff on every turn end and on
+    `git commit`; its `claude-agent-sdk` venv is prebuilt under `SECURITY_WARNINGS_STATE_DIR`. The reviews spend
+    tokens; turn them off with `ENABLE_STOP_REVIEW=0` / `ENABLE_COMMIT_REVIEW=0`
+  - `pr-review-toolkit` — review agents for tests, error handling, type design and comments before opening a PR
 - **Claude Code skills**: `grill-me` (with the `grilling` skill it delegates to) from
   [mattpocock/skills](https://github.com/mattpocock/skills), pinned by `MATTPOCOCK_SKILLS_COMMIT`. They live in the
   managed skills directory `/etc/claude-code/.claude/skills`, because sbx mounts its shared skills store over
@@ -59,6 +71,25 @@ Every bot commit carries both `Co-Authored-By: Claude <noreply@anthropic.com>` a
 A repository that sets its own `core.hooksPath` (husky, lefthook) — or a global one in the `~/.gitconfig` copied
 from the host — overrides the system value; there only the `attribution` layer applies. PR/MR descriptions are
 covered only by the `attribution` layer.
+
+## Bot instructions
+
+`image/CLAUDE.md` is copied to `/etc/claude-code/CLAUDE.md` and loaded in every session, so it holds only what applies
+to every message: role, workflow, hard git rules and sandbox limits, plus a table of topic files. The topic rules in
+`image/rules/` (`dotnet.md`, `libraries.md`, `source-control.md`, `specs-and-adrs.md`) land in `/etc/claude-code/rules/`
+and are read by the bot with the Read tool before the matching work. They are referenced by plain paths on purpose: an
+`@path` import would be loaded at startup and save nothing. A repository's own `CLAUDE.md`/`AGENTS.md` and synced
+convention files such as Curiosus' `.claude/curiosus.md` take precedence.
+
+## Specs and ADRs
+
+The bot rules (`image/rules/specs-and-adrs.md`) make the bot write a spec for user-visible features and
+multi-PR work, and an ADR for decisions that are expensive to reverse or depart from a convention. Both follow the
+templates in `image/templates/`, are written in English unless the project says otherwise, and land in each
+repository under `docs/specs/YYYY-MM-DD-<slug>.md` and `docs/adr/NNNN-<slug>.md` (plans stay in `docs/plans/`).
+
+A spec goes in its own PR before any implementation code, and the owner's merge is the approval. ADRs ship in the PR
+that needs the decision and are superseded, never rewritten.
 
 ## Plannotator
 

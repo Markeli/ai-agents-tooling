@@ -23,6 +23,8 @@ permissions:
       # the balanced sbx policy gates both behind an approval (ghcr.io and registry.gitlab.com are already allowed)
       - registry.terraform.io
       - galaxy.ansible.com
+      # microsoft-docs plugin: Microsoft Learn MCP server (https://learn.microsoft.com/api/mcp)
+      - learn.microsoft.com
 
 # Plannotator's browser UI (PLANNOTATOR_PORT in the image); sbx picks a free host port, see `sbx ports <name>`
 ports:
