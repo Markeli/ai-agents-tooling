@@ -217,9 +217,14 @@ AGENT_SANDBOX_PULL=always sandbox/bin/agent-sandbox ~/Development/Personal/<repo
 
 `--recreate` refuses to remove a sandbox whose clone has commits not pushed to `origin`, checked via the
 `sandbox-<name>` git remote that clone mode adds to the host repo (no access into the sandbox itself is needed).
-It **cannot** detect uncommitted or staged-but-not-committed changes in the sandbox's working tree — the
-git-daemon that serves `sandbox-<name>` only exposes refs, not working-tree state — so push or otherwise save
-anything you care about before recreating, even when `--recreate` doesn't object.
+That remote (and its git-daemon) only exists while the sandbox is running, so `--recreate` starts a stopped
+sandbox itself before checking — no need to `sbx exec <name> true` it awake first. The check **cannot** detect
+uncommitted or staged-but-not-committed changes in the sandbox's working tree — the git-daemon that serves
+`sandbox-<name>` only exposes refs, not working-tree state — so push or otherwise save anything you care about
+before recreating, even when `--recreate` doesn't object.
+
+Add `--yes` to skip `sbx rm`'s own confirmation prompt (it passes `--force` through), once the unpushed-commits
+check above has already passed — useful for running `--recreate` non-interactively.
 
 Removing a sandbox (via `--recreate`, `sbx rm`, or just letting it expire) loses, inside that VM:
 
