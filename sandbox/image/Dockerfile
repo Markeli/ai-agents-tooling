@@ -200,7 +200,9 @@ RUN uv venv "${SECURITY_WARNINGS_STATE_DIR}/agent-sdk-venv" --python /usr/bin/py
 
 # sbx regenerates ~/.claude/settings.json on every create; managed config under /etc/claude-code survives.
 # Last on purpose: these files change most often, and COPY ignores USER, so they stay root-owned.
+# statusline.sh is 755 in the repo, so it stays readable and executable by the agent user after the copy.
 COPY managed-settings.json /etc/claude-code/managed-settings.json
 COPY CLAUDE.md /etc/claude-code/CLAUDE.md
 COPY rules/ /etc/claude-code/rules/
 COPY templates/ /etc/claude-code/templates/
+COPY statusline.sh /etc/claude-code/statusline.sh

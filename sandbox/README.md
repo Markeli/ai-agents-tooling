@@ -113,6 +113,16 @@ Network: no extra allow rules. `PLANNOTATOR_SHARE=disabled` turns off share link
 from the host, not from the sandbox. URL annotation tries `r.jina.ai` first and fetches the page directly when that
 is blocked; both go through the sandbox network policy.
 
+## Status line
+
+`image/statusline.sh` is copied to `/etc/claude-code/statusline.sh` and wired up via `statusLine` in
+`managed-settings.json`, so it survives `sbx create` regenerating `~/.claude/settings.json`. It mirrors the owner's
+host status line (`user / host  path  [branch]  time  | model | ctx: N% used`), except the identity segment reads
+`markeli-agent @ <sandbox name>` — the sandbox name comes from `$SANDBOX_NAME`, falling back to the hostname — and
+the path is shown relative to the repository root (`<repo>/sub/dir`) instead of relative to `$HOME`: the workspace is
+mounted at its host path (e.g. `/Users/...`), while `$HOME` in the sandbox is `/home/agent`, so the host's `~`
+substitution never fires there.
+
 ## One-time setup (host)
 
 1. Bot accounts `markeli-agent` on GitHub and GitLab.com, invited to the repositories (GitHub: collaborator;
