@@ -75,11 +75,17 @@ covered only by the `attribution` layer.
 ## Bot instructions
 
 `image/CLAUDE.md` is copied to `/etc/claude-code/CLAUDE.md` and loaded in every session, so it holds only what applies
-to every message: role, workflow, hard git rules and sandbox limits, plus a table of topic files. The topic rules in
+to every message: role, workflow, hard git rules, what to do with knowledge it discovers and sandbox limits, plus a
+table of topic files. The topic rules in
 `image/rules/` (`dotnet.md`, `libraries.md`, `source-control.md`, `specs-and-adrs.md`) land in `/etc/claude-code/rules/`
 and are read by the bot with the Read tool before the matching work. They are referenced by plain paths on purpose: an
 `@path` import would be loaded at startup and save nothing. A repository's own `CLAUDE.md`/`AGENTS.md` and synced
 convention files such as Curiosus' `.claude/curiosus.md` take precedence.
+
+The bot's own memory lives in `~/.claude` inside the VM and disappears on every recreate, so the entry point tells it to
+put non-obvious repository facts (build gotchas, environment constraints, undocumented conventions) into that
+repository's `AGENTS.md` through its PRs/MRs, where the owner reviews them like code. Personal preferences stay in its
+memory; decisions with alternatives go to ADRs.
 
 ## Specs and ADRs
 

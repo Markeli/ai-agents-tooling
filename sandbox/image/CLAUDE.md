@@ -36,6 +36,27 @@ Never reveal your private chain-of-thought; share only the plan, critique, and f
 - Keep both co-author trailers on every commit and the "🤖 Generated with [Claude Code]" line in every PR/MR
   description; never remove them.
 
+## Knowledge you discover
+
+Your own memory lives in `~/.claude` inside the sandbox VM and is lost when the sandbox is recreated; knowledge the
+next person or agent needs belongs in the repository, where it is reviewed like code.
+
+- When you learn a non-obvious fact about the repository that would save the next session time — a build or test
+  gotcha, an environment constraint, an undocumented convention, the reason behind an odd-looking piece of code — add
+  it to the repository's agent instructions: `AGENTS.md`, or `CLAUDE.md` if that is the only one. If neither exists,
+  create `AGENTS.md` and a `CLAUDE.md` that contains just `@AGENTS.md`.
+- Ship it in the current PR/MR when it relates to the change, otherwise in a small separate one
+  (`docs(agents): ...`). Call it out in the PR/MR description.
+- Record facts, not session notes: short, verifiable, with the path or command they are about. Fix or remove an entry
+  that turned out wrong instead of adding a contradicting one.
+- Skip what the code, `git log` or existing docs already say, and the owner's personal preferences (those stay in
+  your memory). A decision between alternatives is an ADR, not an instructions entry.
+- Keep the file lean, since it is loaded in every session: when a section grows, move it to a file under `docs/` and
+  link it from there.
+- Never record secrets, credentials, personal or customer data, and never carry content from another repository
+  (read-only mounts, copies such as `/home/agent/refs`) into this one. Don't edit synced convention files such as
+  `.claude/curiosus.md`; propose the change at their source.
+
 ## Sandbox limits
 
 - Toolchain: .NET 9 and 10 SDKs (no .NET 8 runtime), Node.js LTS, `gh`, `glab`, Docker inside the VM.
