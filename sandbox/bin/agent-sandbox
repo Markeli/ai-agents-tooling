@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Creates (once) and attaches to a clone-mode sandbox for a repository, running Claude Code as markeli-agent.
-# Usage: agent-sandbox [--no-attach] [--recreate] [--name NAME] [REPO_PATH] [-- CLAUDE_ARGS...]
+# Usage: agent-sandbox [--no-attach] [--recreate] [--yes] [--name NAME] [REPO_PATH] [-- CLAUDE_ARGS...]
 set -euo pipefail
 
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -12,6 +12,7 @@ pull="${AGENT_SANDBOX_PULL:-missing}"
 repo="."
 no_attach=0
 recreate=0
+yes=0
 name=""
 
 die() { echo "agent-sandbox: $*" >&2; exit 1; }
@@ -24,6 +25,10 @@ while [[ $# -gt 0 && "$1" != "--" ]]; do
 			;;
 		--recreate)
 			recreate=1
+			shift
+			;;
+		--yes)
+			yes=1
 			shift
 			;;
 		--name)
@@ -75,6 +80,10 @@ sandbox_exists() {
 # access to the sandbox itself. It cannot see uncommitted/staged-but-not-committed changes in the sandbox's
 # working tree (git-daemon only serves refs) — recreate does not guard against losing those.
 recreate_sandbox() {
+	# The sandbox-<name> remote (and its git-daemon) only exists while the sandbox is running, so a
+	# stopped sandbox must be started before it can be fetched. `sbx exec` starts a stopped sandbox as
+	# a side effect of running a command in it; `true` is a no-op we only use for that side effect.
+	sbx exec "$name" true >/dev/null || die "cannot start sandbox-$name"
 	git -C "$repo" fetch "sandbox-$name" --quiet \
 		|| die "cannot fetch sandbox-$name; is the sandbox still running? (sbx ls)"
 	local unpushed
@@ -82,7 +91,11 @@ recreate_sandbox() {
 		|| die "cannot compare sandbox-$name against origin"
 	[[ -z "$unpushed" ]] \
 		|| die "sandbox-$name has commits not pushed to origin (e.g. $unpushed); push them first, then retry --recreate"
-	sbx rm "$name"
+	if [[ $yes -eq 1 ]]; then
+		sbx rm --force "$name"
+	else
+		sbx rm "$name"
+	fi
 }
 
 ensure_bot_agent
