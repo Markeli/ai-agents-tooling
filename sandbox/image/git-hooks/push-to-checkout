@@ -1,0 +1,12 @@
+#!/bin/sh
+# A present push-to-checkout hook replaces git's built-in receive.denyCurrentBranch=updateInstead logic, so without a
+# repository hook this reproduces it: refuse a dirty working tree or index, otherwise check out the pushed commit.
+hooks=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)/hooks || exit 0
+hook=$hooks/push-to-checkout
+if [ -x "$hook" ] && [ ! "$hook" -ef "$0" ]; then
+	exec "$hook" "$@"
+fi
+git update-index -q --ignore-submodules --refresh \
+	&& git diff-files --quiet --ignore-submodules -- \
+	&& git diff-index --quiet --cached --ignore-submodules HEAD -- \
+	&& git read-tree -u -m HEAD "$1"

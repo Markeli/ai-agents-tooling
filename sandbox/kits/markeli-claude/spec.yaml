@@ -24,6 +24,11 @@ permissions:
       - registry.terraform.io
       - galaxy.ansible.com
 
+# Plannotator's browser UI (PLANNOTATOR_PORT in the image); sbx picks a free host port, see `sbx ports <name>`
+ports:
+  - container: 19432
+    name: plannotator
+
 credentials:
   - service: gitlab
     description: GitLab.com API token of markeli-agent for glab
