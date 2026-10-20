@@ -154,8 +154,17 @@ substitution never fires there.
    brew trust docker/tap && brew install docker/tap/sbx
    sbx login
    sbx policy init balanced
+   sbx policy allow network "**:443" --method GET --path '/**'
+   sbx policy allow network "**:80"  --method GET --path '/**'
    sbx settings set ssh.agentSocketPath ~/.ssh/markeli-agent.sock && sbx daemon restart
    ```
+
+   The two `http` rules let every sandbox read any website (docs, blogs) without an approval, while other methods
+   to hosts outside the allow-list stay blocked. Keep the port in the resource: a bare `**` also matches
+   `github.com:22`/`gitlab.com:22`, and since SSH can't be inspected at L7 the proxy then drops it
+   (`sbx policy log`: `l7 enforcement unavailable`). The rules can't live in `kits/markeli-claude/spec.yaml`: kit
+   network entries are host/port patterns only, without methods or paths. GET still lets data out through the URL,
+   so this guards against writes, not exfiltration.
 
 ## Use
 
