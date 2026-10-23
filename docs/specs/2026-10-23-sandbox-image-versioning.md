@@ -1,6 +1,6 @@
 # Sandbox image: semantic versioning, Renovate instead of the weekly rebuild, reproducible builds
 
-- Status: Approved
+- Status: Implemented
 - Date: 2026-10-23
 - Issue: https://github.com/Markeli/ai-agents-tooling/issues/11
 - ADRs: [0001](../adr/0001-version-the-sandbox-image-from-its-changelog.md) (version source and release flow),
@@ -82,6 +82,9 @@ Out of scope (non-goals):
    - `x.y.z` present with a different digest: publish nothing, create no tag or release, and write to the job summary
      that `x.y.z` is already published and the tree's changes are unreleased (a warning annotation if `Unreleased` is
      empty). The run succeeds.
+   - `x.y.z` absent but `Unreleased` not empty: publish nothing and say so in the job summary. A newer push queued
+     behind the release push can supersede it, and publishing now would ship the `Unreleased` changes as `x.y.z`.
+     Re-running the workflow of the release commit publishes it.
 7. `x.y.z` is immutable. CI never writes a tag `x.y.z` that already exists, and checks again for it right before the
    `imagetools create`. Publishes run in one concurrency group shared by `main` and `release/*`, never cancelled.
 8. Moving tags `x.y`, `x` and `latest`: each points at the image with the highest version in its range. Tag `M` is
@@ -155,10 +158,10 @@ Out of scope (non-goals):
 18. `claude plugin marketplace add` passes a `#<ref>` to `git clone --branch`, so it takes branches and tags but not
     commit SHAs. `claude-plugins-official` has no tags, and Claude Code reserves that marketplace name for GitHub
     sources from `anthropics`, so a local checkout can't be added under it. The Dockerfile therefore adds the
-    marketplace as today, then fetches and checks out the pinned commit in its clone with
-    `git checkout -B main <sha>`, then installs the plugins. All three facts were checked with Claude Code 2.1.309 in
-    this sandbox: `install` used the checked-out commit's version. Keeping a `main` branch at the pinned commit lets the
-    runtime updater (non-goal) fast-forward the clone as it does today. Plugins with an external `url` source
+    marketplace as today, then fetches and checks out the pinned commit in its clone, then installs the plugins. All
+    three facts were checked with Claude Code 2.1.309 in this sandbox: `install` used the checked-out commit's version.
+    At runtime the auto-update (non-goal) replaces the clone with a snapshot of the current marketplace, marked by a
+    `.gcs-sha` file instead of `.git`; the inventory reads whichever is there. Plugins with an external `url` source
     (superpowers, microsoft-docs) carry a `sha` in that marketplace's `marketplace.json`, so the marketplace commit
     pins them too. Plannotator stays pinned by its `#v<version>` tag.
 19. `renovate.json` at the repository root, for the Mend Renovate GitHub App:
@@ -301,15 +304,18 @@ Scenario: Fork PR
   ```
 
 - **Plan script** `.github/scripts/sandbox-image-plan.sh`. Inputs (environment): `IMAGE`, `EVENT`, `REF`,
-  `DEFAULT_BRANCH`, `SHA`, `HEAD_SHA` (PR head), `SAME_REPO`. Outputs (`GITHUB_OUTPUT`, or stdout when unset):
+  `BASE_REF` (PR base branch), `DEFAULT_BRANCH`, `SHA`, `HEAD_SHA` (PR head), `SAME_REPO`, `RELEASE_CHECK` (path of
+  the release-check Markdown). Outputs (`GITHUB_OUTPUT`, or stdout when unset):
   `build` (tree image missing), `push`, `tree`, `tree_tag`, `version` (baked), `revision`, `publish` (true on
   `main`/`release/*` when the release version must be published or completed), `release` (`x.y.z` or empty),
   `publish_tags` (newline-separated tags to point at the tree image), `latest` (whether the GitHub release is marked
-  Latest), `release_check` (path of the generated Markdown), `changed`.
+  Latest), `release_check` (path of the generated Markdown), `changed`, `notes` (why nothing is published).
+- **Publish script** `.github/scripts/sandbox-image-publish.sh`: `IMAGE`, `TREE_TAG`, `RELEASE`, `PUBLISH_TAGS`,
+  `LATEST`, `SHA`, `INVENTORY`; points the tags at the tree image and creates the release if it is missing.
 - **Inventory**: `/etc/claude-code/inventory.sh`, stdout `name<TAB>version`, sorted by name, exit 0.
-- **Inventory diff**: `.github/scripts/sandbox-image-inventory-diff.sh <old.tsv|-> <new.tsv> <old version>`, stdout
-  the Markdown table of requirement 15 (`-` for no previous inventory). Used by both the release check and the
-  release notes.
+- **Inventory diff**: `.github/scripts/sandbox-image-inventory-diff.sh <old.tsv|-> <new.tsv> <old label>
+  <new label>`, stdout the Markdown table of requirement 15 (`-` for no previous inventory). Used by both the release
+  check and the release notes.
 - **Cleanup**: `.github/scripts/sandbox-image-cleanup.sh`. Inputs `OWNER`, `PACKAGE`, `MAX_AGE_DAYS` (default 30),
   `DRY_RUN`; uses `gh api` and `docker buildx imagetools inspect --raw`.
 
@@ -321,6 +327,13 @@ Scenario: Fork PR
 - Merge after `tree-<hash>` was cleaned (PR open more than 30 days) → `main` builds the tree, then publishes.
 - Version heading malformed, or `release/<major>.x` with a CHANGELOG of another major → the plan fails with a message.
 - `imagetools create` succeeded but tagging or the release failed → a re-run completes them (requirement 6).
+- A waiting publish cancelled by GitHub (one running and one pending job per concurrency group) → re-run it. The
+  publish script checks `x.y.z` and the moving tags again under the group, and marks the release Latest only while
+  `latest` points at it, so the order of re-runs doesn't matter.
+- A lookup in the registry fails after the tag was found → the run fails; an empty label or digest never counts as
+  "unversioned" or "same image".
+- Cleanup: a stale `tree-*` version gets released between the listing and its deletion → its tags are read again
+  right before the DELETE, and it is kept.
 - Moving tag points at a higher version (a maintenance release after a newer minor) → not moved.
 - Previous release without `inventory.tsv` (none before 1.0.0) → the notes say there is nothing to diff against.
 - Cleanup token without admin on the package → the job fails with a pointer to the README.
@@ -330,9 +343,10 @@ Scenario: Fork PR
 
 ## Test plan
 
-- `.github/scripts/tests/run.sh`: plain bash, no extra dependencies. It puts stubs for `docker`, `git` and `gh` on
-  `PATH`, with a fixture per case (registry tags with digests and version labels, the CHANGELOG, the diff), and asserts
-  on the plan outputs and the release-check Markdown. Cases:
+- `.github/scripts/tests/run.sh`: plain bash, no extra dependencies. It runs every case in a throwaway git
+  repository (a base commit and the change under test, so `HEAD^1` is the base as in a PR merge commit) and puts stubs
+  for `docker` and `gh` on `PATH`, with a fixture per case (registry tags with digests and version labels,
+  releases). It asserts on the plan outputs and the release-check Markdown. Cases:
   - same-repo PR with and without an `Unreleased` entry, a release PR, a PR touching only the workflow or scripts;
   - fork PR (no push, summary only);
   - `main` push with only `Unreleased` changes (no publish);

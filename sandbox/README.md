@@ -9,6 +9,8 @@ agent is forwarded.
 sandbox/
 ├── image/                  template image (ghcr.io/markeli/claude-sandbox), built by CI
 │   ├── Dockerfile          .NET 9/10, Node.js LTS, glab, Plannotator, skills, plugins, bot git identity
+│   ├── CHANGELOG.md        image version and release notes (see Image versioning)
+│   ├── inventory.sh        lists the toolchain with versions (/etc/claude-code/inventory.sh)
 │   ├── managed-settings.json  plugins, commit/PR attribution, Remote Control, claude.ai connectors off
 │   ├── git-hooks/          system core.hooksPath: co-author trailers, chains to repository hooks
 │   ├── CLAUDE.md           bot rules entry point, loaded as managed instructions
@@ -213,29 +215,111 @@ each other.
 
 ## Image versioning
 
-CI publishes two tags on every push to `main` (see `.github/workflows/sandbox-image.yml`): a moving `latest` and an
-immutable `sha-<short>` pinned to the commit that built it.
+The image version is the first `## [x.y.z] - yyyy-mm-dd` section of
+[`sandbox/image/CHANGELOG.md`](image/CHANGELOG.md); changes not released yet sit under `## [Unreleased]`. The workflow
+is `.github/workflows/sandbox-image.yml`, its decisions are in `.github/scripts/sandbox-image-plan.sh`, and the design
+is in [the spec](../docs/specs/2026-10-23-sandbox-image-versioning.md) and ADRs
+[0001](../docs/adr/0001-version-the-sandbox-image-from-its-changelog.md) and
+[0002](../docs/adr/0002-update-pinned-image-inputs-with-renovate.md).
 
-Every image is also tagged `tree-<hash>`, the git tree hash of `sandbox/image` (`git rev-parse HEAD:sandbox/image`),
-so identical content is built once. A PR from a branch of this repository builds and pushes only `tree-<hash>`, and
-skips the build when that tag already exists; a fork PR builds without pushing. On `main`, an existing `tree-<hash>`
-(usually from the PR) is retagged to `latest` and `sha-<short>` with `docker buildx imagetools create`, without a
-rebuild; otherwise all three tags are built. A weekly scheduled run and a manual run with `force` rebuild without
-cache to pick up base image and security updates. They move `latest` and `tree-<hash>`, but write `sha-<short>`
-only if that commit has none yet, so a pinned `sha-<short>` never changes. The decision logic is
-`.github/scripts/sandbox-image-plan.sh`. The kit (`sandbox/kits/markeli-claude/spec.yaml`)
-references `latest` — the simplest option, and the one `agent-sandbox` already assumes with its `--pull missing`
-default (below).
+| Tag | Meaning |
+| --- | --- |
+| `x.y.z` | A release; immutable, CI never writes an existing one |
+| `x.y`, `x` | The highest release of that minor or major line |
+| `latest` | The highest release from `main` (maintenance releases never move it); the kit's default |
+| `tree-<hash>` | One build per git tree of `sandbox/image`, never rebuilt; internal, deleted after 30 days unless released |
+| `sha-<short>` | Legacy: no longer published; existing tags stay |
 
-Pinning `image:` to a `sha-<short>` tag instead makes the whole sandbox fleet reproducible and immune to upstream
-drift, at the cost of a manual, two-step bump: merge a toolchain change to `main`, wait for CI to publish the new
-`sha-<short>` tag (copy it from the workflow run's job summary or the GHCR package page), then commit the updated
-pin in `spec.yaml` before recreating sandboxes. `latest` needs no such follow-up — new sandboxes just pick up
-whatever CI published most recently, with the trade-offs described below.
+### SemVer for the image
 
-Either way, **existing sandboxes are unaffected**: the image is resolved once, at `sbx create` time, and never
-re-pulled or re-resolved afterwards. Run `make validate` after editing `spec.yaml` (bumping the pin or anything
-else) to check the kit descriptor before recreating sandboxes against it.
+- **Major**: something a sandbox or a user relies on is removed or changed incompatibly: a dropped SDK or runtime
+  (like .NET 8), a removed tool or plugin, changed paths of the managed config (`/etc/claude-code/...`), the user or
+  home layout, or the kit contract (ports, environment, credentials the image expects). Add a `**Breaking:**` note
+  with what to change.
+- **Minor**: added tools, plugins, rules or templates, or a new major version of a bundled tool.
+- **Patch**: minor or patch bumps of pinned inputs, a new base image digest, fixes, and changes to rules and
+  templates that don't add any.
+
+### Releasing
+
+1. Every PR that changes `sandbox/image` adds its entry under `## [Unreleased]` (`### Added`, `### Changed`,
+   `### Removed`, `### Fixed`, `### Security`). CI, tests and internal refactoring need none.
+2. To release, open a PR that turns `## [Unreleased]` into `## [x.y.z] - yyyy-mm-dd`, with the bump chosen from the
+   entries by the rules above, and a summary of the Renovate updates merged since the last release.
+3. The merge publishes it: CI points `x.y.z`, `x.y`, `x` and `latest` at the `tree-<hash>` image the PR built, and
+   creates the git tag `claude-sandbox.v<x.y.z>` and a GitHub release with that CHANGELOG section, the toolchain
+   changes since the previous release and `inventory.tsv`. Re-running a failed publish completes it. Publishes run
+   one at a time; GitHub cancels a waiting publish when a third one queues, so re-run a cancelled one. The publish
+   checks the tags again when it runs, so a late re-run never moves a tag back or takes Latest from a newer release.
+
+Pushes with only `Unreleased` changes publish nothing. Every PR gets a release-check comment: whether the merge
+releases a version, whether the change is under `Unreleased` (or ⚠️ has no entry), and a table of the toolchain
+changes against the release it builds on (for example, the Claude Code version a base image bump brings). It never
+fails the build.
+
+### Updates through Renovate
+
+Every input of the image is pinned: the base image by digest, tools in `ARG`s by version, the
+`claude-plugins-official` marketplace and mattpocock skills by commit, GitHub Actions by SHA. The Renovate GitHub
+App (`renovate.json`) opens one grouped PR for all non-major updates on Monday mornings (Europe/Moscow) and a separate
+PR per major. Nothing is automerged. A base digest update rebuilds every layer, which also brings in Ubuntu security
+updates. Renovate PRs don't edit the CHANGELOG: the release check flags them, and the next release PR summarises them.
+.NET SDK channels (`DOTNET_CHANNELS`) stay a manual change. Apt packages and .NET SDK patch versions are resolved when
+a tree is built.
+
+### Inside a sandbox
+
+`/etc/claude-code/image-release` holds `VERSION` (`x.y.z`, or `<x.y.z>+unreleased.<tree>` for a build of unreleased
+changes), `TREE` (the `sandbox/image` tree hash) and `REVISION` (the commit the tree was built from: the PR head for
+images built by a PR, which a merge retags without rebuilding, so it can differ from the `main` commit; the git tag
+`claude-sandbox.v<x.y.z>` points at that one). The OCI labels `org.opencontainers.image.version`, `revision` and
+`created` carry the same. `/etc/claude-code/inventory.sh` lists the toolchain as built. Claude Code and its plugins
+keep auto-updating at runtime, so a long-running sandbox can be ahead of its inventory. `agent-sandbox` prints the
+image reference, digest and version of the sandbox it creates or attaches to.
+
+### Pinning the kit and rolling back
+
+The kit (`sandbox/kits/markeli-claude/spec.yaml`) uses `latest`, and **existing sandboxes are unaffected** by new
+releases: the image is resolved once, at `sbx create`. To keep new sandboxes on a known release, or to roll back,
+set `image: ghcr.io/markeli/claude-sandbox:<x.y.z>` (or `:<x>` to follow a major) in `spec.yaml`, run
+`make validate`, and recreate the sandbox (below). The GitHub releases list what changed between versions.
+
+### Maintenance of an older major
+
+When a new major is out and the previous one needs a fix:
+
+1. The owner creates `release/<major>.x` from the last tag of that major (`claude-sandbox.v1.4.0`). Only admins can
+   create or push `release/*` (ruleset below), since a push there publishes.
+2. Fix on `main` first, then cherry-pick into a branch from `release/<major>.x` with a new `## [1.4.1]` section, and
+   open the PR to `release/<major>.x`. The merge publishes `1.4.1` and moves `1.4` and `1`, but not `latest`, and its
+   GitHub release is not marked Latest. Renovate updates `main` only.
+
+### One-time setup (owner)
+
+- Install the [Renovate GitHub App](https://github.com/apps/renovate) on this repository and review its onboarding PR.
+- Rulesets: `release/**` can be created and pushed only by admins (the bot has push access), and release tags can't
+  be moved or deleted. The workflow's `GITHUB_TOKEN` still creates the tags.
+
+  ```bash
+  gh api --method POST repos/Markeli/ai-agents-tooling/rulesets --input - <<'EOF'
+  {"name": "release-branches", "target": "branch", "enforcement": "active",
+   "conditions": {"ref_name": {"include": ["refs/heads/release/**"], "exclude": []}},
+   "rules": [{"type": "creation"}, {"type": "update"}, {"type": "deletion"}, {"type": "non_fast_forward"}],
+   "bypass_actors": [{"actor_id": 5, "actor_type": "RepositoryRole", "bypass_mode": "always"}]}
+  EOF
+  gh api --method POST repos/Markeli/ai-agents-tooling/rulesets --input - <<'EOF'
+  {"name": "release-tags", "target": "tag", "enforcement": "active",
+   "conditions": {"ref_name": {"include": ["refs/tags/claude-sandbox.v*"], "exclude": []}},
+   "rules": [{"type": "update"}, {"type": "deletion"}, {"type": "non_fast_forward"}],
+   "bypass_actors": [{"actor_id": 5, "actor_type": "RepositoryRole", "bypass_mode": "always"}]}
+  EOF
+  ```
+
+- Cleanup: `.github/workflows/sandbox-image-cleanup.yml` runs weekly (and manually, as a dry run by default) and
+  deletes `tree-*` and untagged versions older than 30 days, keeping releases, `latest`, `sha-*` and the parts of the
+  images they point at. It uses `GITHUB_TOKEN`, which can delete versions only while this repository has the
+  **Admin** role on the package: on the package page, Package settings → Manage Actions access, set
+  `ai-agents-tooling` to Admin. Without it the job fails with a 403 instead of skipping.
 
 ## Update or recreate a sandbox
 
@@ -250,6 +334,11 @@ sbx rm <name>
 sandbox/bin/agent-sandbox ~/Development/Personal/<repo>                            # reuses a locally loaded image
 AGENT_SANDBOX_PULL=always sandbox/bin/agent-sandbox ~/Development/Personal/<repo>  # forces the current remote `latest`
 ```
+
+`agent-sandbox` prints the version it runs (`agent-sandbox: <name> runs <image>@<digest>, version 1.3.0`); compare
+it with the [releases](https://github.com/Markeli/ai-agents-tooling/releases) to see what a recreate brings. A
+local `make load` build reports `0.0.0+local`. To recreate on a specific release instead of `latest`, pin the kit
+first ([Pinning the kit and rolling back](#pinning-the-kit-and-rolling-back)).
 
 `--recreate` refuses to remove a sandbox whose clone has commits not pushed to `origin`, checked via the
 `sandbox-<name>` git remote that clone mode adds to the host repo (no access into the sandbox itself is needed).

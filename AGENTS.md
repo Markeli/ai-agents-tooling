@@ -21,3 +21,13 @@ Personal monorepo for AI agent tooling: skills, MCP servers, Claude plugins, sys
 - **Prompts**: Plain Markdown, one file per prompt
 - Each top-level component should have its own README
 - Keep things minimal — avoid over-engineering scaffolding
+
+## Checks and gotchas
+
+- Sandbox image CI scripts (`.github/scripts/`): tests are `.github/scripts/tests/run.sh` (stubs for `docker`/`gh`,
+  real throwaway git repos); the PR `lint` job of `sandbox-image.yml` also runs shellcheck, actionlint, hadolint and
+  the Renovate validator.
+- In the sandbox, shellcheck dies with `commitBuffer: invalid argument` on files with emoji unless the locale is
+  UTF-8: run `LC_ALL=C.UTF-8 shellcheck -x ...`.
+- `renovate --platform=local --dry-run=extract` (via `npx --package renovate@<version> --`) only sees git-tracked
+  files, `renovate.json` included: `git add -N` new files first, or it silently extracts with the default config.

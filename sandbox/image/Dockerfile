@@ -1,4 +1,5 @@
-FROM docker/sandbox-templates:claude-code-docker
+# Pinned by digest: Renovate updates it (renovate.json), which brings a new Claude Code and rebuilds every layer
+FROM docker/sandbox-templates:claude-code-docker@sha256:4a94d9144a70df744fd9247e0c365a14cfb97024afab8db7597c8ba3e0637642
 
 LABEL org.opencontainers.image.source="https://github.com/markeli/ai-agents-tooling" \
 	org.opencontainers.image.description="Claude Code sandbox template for the markeli-agent bot"
@@ -6,19 +7,44 @@ LABEL org.opencontainers.image.source="https://github.com/markeli/ai-agents-tool
 # Several RUN steps below pipe curl into jq/sha256sum; pipefail makes an upstream failure fail the whole step
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-ARG GLAB_VERSION=1.119.0
+# Every input is pinned; Renovate reads the "# renovate:" comments (custom managers in renovate.json).
+# .NET SDK channels are a deliberate, manual choice; dotnet-install.sh takes the latest patch of each.
 ARG DOTNET_CHANNELS="9.0 10.0"
+# renovate: datasource=gitlab-releases depName=gitlab-org/cli
+ARG GLAB_VERSION=1.119.0
+# renovate: datasource=node-version depName=node versioning=node
 ARG NODE_MAJOR=24
+# renovate: datasource=github-releases depName=mikefarah/yq
 ARG YQ_VERSION=4.54.1
+# renovate: datasource=github-releases depName=rhysd/actionlint
 ARG ACTIONLINT_VERSION=1.7.12
+# renovate: datasource=github-releases depName=hadolint/hadolint
 ARG HADOLINT_VERSION=2.15.1
+# renovate: datasource=github-releases depName=hashicorp/terraform
 ARG TERRAFORM_VERSION=1.16.5
+# renovate: datasource=github-releases depName=backnotprop/plannotator
 ARG PLANNOTATOR_VERSION=0.28.2
+# renovate: datasource=nuget depName=csharp-ls
 ARG CSHARP_LS_VERSION=0.28.0
+# renovate: datasource=npm depName=typescript-language-server
 ARG TS_LS_VERSION=6.0.2
 # TypeScript 7 is the native compiler and ships no tsserver, which typescript-language-server needs
+# renovate: datasource=npm depName=typescript
 ARG TYPESCRIPT_VERSION=6.0.3
+# renovate: datasource=npm depName=pnpm
+ARG PNPM_VERSION=12.15.0
+# renovate: datasource=npm depName=yarn packageName=@yarnpkg/cli-dist
+ARG YARN_VERSION=4.18.1
+# renovate: datasource=pypi depName=ansible-core
+ARG ANSIBLE_CORE_VERSION=2.21.5
+# renovate: datasource=pypi depName=ansible-lint
+ARG ANSIBLE_LINT_VERSION=26.10.1
+# renovate: datasource=pypi depName=claude-agent-sdk
+ARG CLAUDE_AGENT_SDK_VERSION=0.2.173
+# renovate: datasource=git-refs depName=https://github.com/mattpocock/skills branch=main
 ARG MATTPOCOCK_SKILLS_COMMIT=f6abdeb8dd2a9be64f924ab44c7af374cb76726d
+# renovate: datasource=git-refs depName=https://github.com/anthropics/claude-plugins-official branch=main
+ARG CLAUDE_PLUGINS_OFFICIAL_COMMIT=58267944f92187b7d6a1c822165c96c81c864806
 ARG BOT_NAME=markeli-agent
 ARG BOT_EMAIL=markelow.dev+agent@gmail.com
 
@@ -162,6 +188,8 @@ RUN for skill in grill-me grilling; do \
 		curl -fsSL --create-dirs -o "/etc/claude-code/.claude/skills/${skill}/SKILL.md" \
 			"https://raw.githubusercontent.com/backnotprop/plannotator/v${PLANNOTATOR_VERSION}/apps/skills/core/${skill}/SKILL.md"; \
 	done \
+	&& printf 'skills mattpocock\t%s\nskills plannotator\tv%s\n' "${MATTPOCOCK_SKILLS_COMMIT}" "${PLANNOTATOR_VERSION}" \
+		> /etc/claude-code/skill-sources.tsv \
 	&& chmod -R a+rX /etc/claude-code
 
 # "agent" is the base image's fixed non-root account, not a numeric id
@@ -173,19 +201,26 @@ ENV PATH="/home/agent/.dotnet/tools:${PATH}"
 
 # Pre-fetches pnpm/yarn into the agent's corepack cache; pnpm --version also triggers its one-time native binary
 # download, so neither happens on the agent's first real use
-RUN corepack prepare pnpm@latest --activate \
-	&& corepack prepare yarn@stable --activate \
+RUN corepack prepare "pnpm@${PNPM_VERSION}" --activate \
+	&& corepack prepare "yarn@${YARN_VERSION}" --activate \
 	&& pnpm --version >/dev/null \
 	&& yarn --version >/dev/null
 
-RUN uv tool install ansible-core \
-	&& uv tool install ansible-lint
+RUN uv tool install "ansible-core==${ANSIBLE_CORE_VERSION}" \
+	&& uv tool install "ansible-lint==${ANSIBLE_LINT_VERSION}"
 
 RUN dotnet tool install --global csharp-ls --version "${CSHARP_LS_VERSION}"
 
-# The plannotator repository is large enough to exceed the default 120 s clone timeout on a slow link
+# The plannotator repository is large enough to exceed the default 120 s clone timeout on a slow link.
+# claude-plugins-official is pinned by checking out the commit in its clone before installing: "#<ref>" goes to
+# git clone --branch, which takes no SHAs, the repository has no tags, and its name is reserved for the GitHub source.
+# Plugins with an external source (superpowers, microsoft-docs) are pinned by sha in its marketplace.json. At runtime
+# Claude Code's auto-update still replaces the clone with a snapshot (.gcs-sha) of the current marketplace.
 RUN export CLAUDE_CODE_PLUGIN_GIT_TIMEOUT_MS=600000 \
 	&& claude plugin marketplace add anthropics/claude-plugins-official \
+	&& marketplace=$(jq -r '."claude-plugins-official".installLocation' "${HOME}/.claude/plugins/known_marketplaces.json") \
+	&& git -C "$marketplace" fetch --quiet --depth 1 origin "${CLAUDE_PLUGINS_OFFICIAL_COMMIT}" \
+	&& git -C "$marketplace" checkout --quiet "${CLAUDE_PLUGINS_OFFICIAL_COMMIT}" \
 	&& for plugin in superpowers csharp-lsp typescript-lsp microsoft-docs security-guidance pr-review-toolkit; do \
 		claude plugin install "${plugin}@claude-plugins-official" || exit; \
 	done \
@@ -196,7 +231,8 @@ RUN export CLAUDE_CODE_PLUGIN_GIT_TIMEOUT_MS=600000 \
 # Python has no ensurepip. Prebuilding it with uv outside ~/.claude (regenerated by sbx) makes that hook a no-op.
 ENV SECURITY_WARNINGS_STATE_DIR=/home/agent/.local/state/security-guidance
 RUN uv venv "${SECURITY_WARNINGS_STATE_DIR}/agent-sdk-venv" --python /usr/bin/python3 \
-	&& uv pip install --python "${SECURITY_WARNINGS_STATE_DIR}/agent-sdk-venv/bin/python" claude-agent-sdk
+	&& uv pip install --python "${SECURITY_WARNINGS_STATE_DIR}/agent-sdk-venv/bin/python" \
+		"claude-agent-sdk==${CLAUDE_AGENT_SDK_VERSION}"
 
 # sbx regenerates ~/.claude/settings.json on every create; managed config under /etc/claude-code survives.
 # Last on purpose: these files change most often, and COPY ignores USER, so they stay root-owned.
@@ -206,3 +242,19 @@ COPY CLAUDE.md /etc/claude-code/CLAUDE.md
 COPY rules/ /etc/claude-code/rules/
 COPY templates/ /etc/claude-code/templates/
 COPY statusline.sh /etc/claude-code/statusline.sh
+COPY inventory.sh /etc/claude-code/inventory.sh
+
+# Image identity, set by CI (see .github/scripts/sandbox-image-plan.sh) and read by the bot and agent-sandbox.
+# Declared last so a new version rebuilds only this layer.
+ARG IMAGE_VERSION=0.0.0+local
+ARG IMAGE_TREE=unknown
+ARG IMAGE_REVISION=unknown
+# "root" is the meaningful name here, not a numeric id
+# hadolint ignore=DL3066
+USER root
+RUN printf 'VERSION=%s\nTREE=%s\nREVISION=%s\n' "${IMAGE_VERSION}" "${IMAGE_TREE}" "${IMAGE_REVISION}" \
+		> /etc/claude-code/image-release \
+	&& chmod 0644 /etc/claude-code/image-release
+# "agent" is the base image's fixed non-root account, not a numeric id
+# hadolint ignore=DL3066
+USER agent

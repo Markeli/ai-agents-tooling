@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# Stub of the gh commands the sandbox-image scripts use, backed by fixture files in $FIXTURE:
+#   releases       "<tag> [<asset>...]" per existing GitHub release
+#   inv-<tag>.tsv  the inventory.tsv asset of that release
+#   versions.tsv   package versions as the cleanup's --jq prints them: id, digest, updated_at, tags
+#   tags-<id>      tags of version <id> when read again by id (default: its tags in versions.tsv)
+#   forbidden      when present, gh api answers HTTP 403
+#   calls          every write (release create, api DELETE) is appended here
+set -euo pipefail
+
+release_line() { awk -v t="$1" '$1 == t' "$FIXTURE/releases" 2>/dev/null || true; }
+
+case "$1 $2" in
+"release view")
+	line=$(release_line "$3")
+	if [ -z "$line" ]; then
+		echo "release not found" >&2
+		exit 1
+	fi
+	if [[ " $* " == *" --json assets "* ]]; then
+		read -r _ assets <<<"$line"
+		tr ' ' '\n' <<<"$assets"
+	fi
+	;;
+"release list")
+	awk '{ print $1 }' "$FIXTURE/releases" 2>/dev/null || true
+	;;
+"release download")
+	tag=$3
+	shift 3
+	while [ $# -gt 0 ]; do
+		[ "$1" = --output ] && out=$2
+		shift
+	done
+	cp "$FIXTURE/inv-$tag.tsv" "$out"
+	;;
+"release create")
+	shift 2
+	printf 'release create' >>"$FIXTURE/calls"
+	printf ' %q' "$@" >>"$FIXTURE/calls"
+	echo >>"$FIXTURE/calls"
+	# Keep the notes: the file is removed when the script exits
+	while [ $# -gt 0 ]; do
+		[ "$1" = --notes-file ] && cp "$2" "$FIXTURE/notes.md"
+		shift
+	done
+	;;
+api*)
+	if [ -e "$FIXTURE/forbidden" ]; then
+		echo "gh: Resource not accessible by integration (HTTP 403)" >&2
+		exit 1
+	fi
+	if [[ " $* " == *" --method DELETE "* ]]; then
+		echo "api DELETE ${*: -1}" >>"$FIXTURE/calls"
+	elif [[ " $* " == *" --paginate "* ]]; then
+		cat "$FIXTURE/versions.tsv"
+	else
+		id=${2##*/}
+		if [ -f "$FIXTURE/tags-$id" ]; then
+			cat "$FIXTURE/tags-$id"
+		else
+			awk -F '\t' -v id="$id" '$1 == id { print $4 }' "$FIXTURE/versions.tsv"
+		fi
+	fi
+	;;
+*)
+	echo "gh stub: unsupported: $*" >&2
+	exit 2
+	;;
+esac
