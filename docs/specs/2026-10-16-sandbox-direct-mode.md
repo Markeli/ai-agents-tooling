@@ -62,7 +62,7 @@ Functional:
    `--name` (to keep both).
 7. `--recreate` on an existing clone-mode sandbox must run the unpushed-commits safety check (start the sandbox if
    stopped, fetch `sandbox-<name>`, compare against `origin`) in the repository the sandbox was cloned from (its
-   `Clone source`), not in the current `PATH`. If that repository is missing or the fetch fails, it must stop without
+   `source_repo_dir`), not in the current `PATH`. If that repository is missing or the fetch fails, it must stop without
    removing the sandbox, as today.
 8. `--recreate` on an existing direct-mode sandbox skips the safety check and proceeds straight to removal: there is
    nothing to check (see Edge cases). The new sandbox is then created according to the current invocation, so
@@ -102,9 +102,9 @@ Scenario: Non-repo path, explicit direct mode
   Then the sandbox is created in direct mode without any auto-detection notice
 
 Scenario: Recreating a clone-mode sandbox
-  Given a sandbox "name" exists and `sbx inspect name` shows a "Clone source"
+  Given a sandbox "name" exists and `sbx inspect name --json` has a "source_repo_dir"
   When I run `agent-sandbox --recreate <path>`
-  Then agent-sandbox runs the unpushed-commits safety check in the "Clone source" repository before removing it
+  Then agent-sandbox runs the unpushed-commits safety check in the "source_repo_dir" repository before removing it
 
 Scenario: Recreating a stopped clone-mode sandbox
   Given a clone-mode sandbox "name" exists and is stopped
@@ -118,7 +118,7 @@ Scenario: Recreating a clone with the same name but a different path
   And it stops with an error about the unpushed commits without removing the sandbox
 
 Scenario: Recreating a direct-mode sandbox
-  Given a sandbox "name" exists and `sbx inspect name` shows no "Clone source"
+  Given a sandbox "name" exists and `sbx inspect name --json` has no "source_repo_dir"
   When I run `agent-sandbox --recreate --direct <path>`
   Then agent-sandbox skips the unpushed-commits check and removes the sandbox directly
 
@@ -140,7 +140,7 @@ Scenario: Existing sandbox for another path
   Then agent-sandbox stops with an error naming "/repos/app" and does not attach
 
 Scenario: Mode of an existing sandbox can't be determined
-  Given a sandbox "name" exists and `sbx inspect name` fails or its output has no "Workspace" line
+  Given a sandbox "name" exists and `sbx inspect name --json` fails or has no "workspace"
   When I run `agent-sandbox <path>` with or without `--recreate`
   Then agent-sandbox stops with an error and neither attaches to nor removes the sandbox
 ```
@@ -166,34 +166,44 @@ Scenario: Mode of an existing sandbox can't be determined
     absolute path first.
 - `sbx create` invocation: clone mode keeps `sbx create --clone --pull "$pull" --name "$name" "$kit" "$repo"`;
   direct mode drops `--clone`: `sbx create --pull "$pull" --name "$name" "$kit" "$repo"`.
-- Existing sandbox detection: `sbx inspect "$name"`, which works without `agent-sandbox` persisting any state of its
-  own and is tied to the sandbox, not to the invocation. Observed output (sbx v0.49.1) for a clone-mode sandbox:
+- Existing sandbox detection: `sbx inspect "$name" --json`, which works without `agent-sandbox` persisting any state
+  of its own, is tied to the sandbox rather than to the invocation, and reports the same fields for running and
+  stopped sandboxes. Observed output (sbx v0.49.1), trimmed:
 
-  ```text
-  Workspace:       /Users/markelow/Development/Personal/ai-agents-tooling
-  Clone source:    /Users/markelow/Development/Personal/ai-agents-tooling
+  ```jsonc
+  // clone mode (stopped)
+  { "name": "chur", "state": "stopped",
+    "workspace": "/Users/markelow/Development/Personal/chur-projects/chur",
+    "source_repo_dir": "/Users/markelow/Development/Personal/chur-projects/chur" }
+  // direct mode
+  { "name": "tmp-direct", "state": "stopped", "workspace": "/Users/markelow/dir" }
   ```
 
-  - `Workspace:` missing or empty → mode unknown → error, no further action.
-  - `Clone source: <dir>` present → clone mode; `<dir>` is the repository for the safety check and the path compared
-    against the current invocation.
-  - `Workspace:` present, `Clone source:` absent → direct mode; `Workspace` is the mounted path.
+  Parsed with `jq` (shipped with macOS since 15):
+  - `sbx inspect` fails, the output isn't JSON, or `.workspace` is missing or empty → mode unknown → error, no
+    further action.
+  - `.source_repo_dir` is a non-empty string → clone mode; it is the repository for the safety check and the path
+    compared against the current invocation.
+  - `.source_repo_dir` absent or `null` → direct mode; `.workspace` is the mounted path. Any other value (empty
+    string, non-string) → mode unknown → error.
   - Paths are compared after the same resolution the current invocation uses (`git rev-parse --show-toplevel` in
     clone mode, `cd && pwd` in direct mode).
 - `--recreate` safety check: `recreate_sandbox()` keeps its current steps (`sbx exec "$name" true` to start a stopped
   sandbox, `git fetch "sandbox-$name"`, `git rev-list --remotes="sandbox-$name" --not --remotes=origin`), but runs
-  git in the `Clone source` directory instead of `$repo`.
+  git in the `source_repo_dir` directory instead of `$repo`.
 
 ## Edge cases and failure modes
 
-- `sbx inspect` output is human-readable, not a stable format. A future sbx that renames or reformats the
-  `Workspace`/`Clone source` lines makes the mode unknown, which `agent-sandbox` treats as an error rather than as
-  direct mode, so a format change can block a run but can't delete a clone with unpushed commits.
-- Sandboxes created before this change are all clone mode with a `Clone source` equal to their repository, so a
+- A future sbx that renames `workspace` makes the mode unknown, which is an error. Renaming only `source_repo_dir`
+  would make a clone look like direct mode, and `--recreate` would skip the safety check. To catch that, before
+  removing a sandbox detected as direct mode, `agent-sandbox` checks whether the host repository at `.workspace` has
+  a `sandbox-<name>` remote (`git -C "$workspace" remote get-url "sandbox-$name"`, tolerating a non-repo path). sbx
+  adds that remote only for clones, and in clone mode `.workspace` equals `.source_repo_dir`, so a present remote
+  means the detection is wrong → mode unknown → error, nothing removed.
+- Sandboxes created before this change are all clone mode with a `source_repo_dir` equal to their repository, so a
   plain `agent-sandbox <repo>` keeps attaching to them as today.
-- The `Clone source` repository was moved or deleted on the host → the fetch fails and `--recreate` stops, as it
+- The `source_repo_dir` repository was moved or deleted on the host → the fetch fails and `--recreate` stops, as it
   does today when the fetch fails.
-
 - `--direct` combined with a path that doesn't exist or isn't a directory → `sbx create` reports the error;
   `agent-sandbox` doesn't duplicate that validation.
 - Direct mode, `--recreate`: nothing is lost by removing the sandbox, because the mounted path *is* the host's own
@@ -227,10 +237,4 @@ flag, or deployment ordering needed.
 
 ## Open questions
 
-To verify against a real sbx before this spec is merged (they decide whether the parsing above is right, not the
-design):
-
-1. Does `sbx inspect` print `Workspace:` and `Clone source:` for a **stopped** sandbox too?
-2. What does `sbx inspect` print for a **direct-mode** sandbox: no `Clone source:` line, or the line with an empty
-   value or a placeholder? Does `sbx inspect` have a machine-readable output (`--json` or similar)? If it does, the
-   contract switches to that.
+None.
