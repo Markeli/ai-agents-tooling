@@ -3,6 +3,7 @@
 # statusline-command.sh, but the identity segment shows the bot and the sandbox instead of `user / host`,
 # and the path is shortened relative to the repo root instead of $HOME (the workspace is mounted at its
 # host path, e.g. /Users/..., while $HOME here is /home/agent, so the host's `~` substitution never fires).
+# The path is bright magenta rather than the host's blue, which is barely readable on a dark terminal.
 
 input=$(cat)
 
@@ -38,7 +39,7 @@ if [ -n "$used_pct" ]; then
 fi
 
 printf "\033[36m%s\033[0m @ \033[36m%s\033[0m  " "markeli-agent" "$sandbox_name"
-printf "\033[34m%s\033[0m" "$short_path"
+printf "\033[95m%s\033[0m" "$short_path"
 if [ -n "$branch" ]; then
 	printf "  \033[32m[%s]\033[0m" "$branch"
 fi

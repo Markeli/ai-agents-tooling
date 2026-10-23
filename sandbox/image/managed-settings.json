@@ -3,6 +3,7 @@
 		"type": "command",
 		"command": "bash /etc/claude-code/statusline.sh"
 	},
+	"remoteControlAtStartup": true,
 	"attribution": {
 		"commit": "🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nCo-authored-by: Maxim Markelow <markelow.dev@gmail.com>",
 		"pr": "🤖 Generated with [Claude Code](https://claude.com/claude-code)"
