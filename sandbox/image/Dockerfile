@@ -1,5 +1,6 @@
-# Pinned by digest: Renovate updates it (renovate.json), which brings a new Claude Code and rebuilds every layer
-FROM docker/sandbox-templates:claude-code-docker@sha256:4a94d9144a70df744fd9247e0c365a14cfb97024afab8db7597c8ba3e0637642
+# The release tag says which template version this is; the digest makes it immutable, since Docker Hub tags can be
+# re-pushed. Renovate bumps both (renovate.json); a new template brings a new Claude Code and rebuilds every layer.
+FROM docker/sandbox-templates:claude-code-docker-0.10.0@sha256:4a94d9144a70df744fd9247e0c365a14cfb97024afab8db7597c8ba3e0637642
 
 LABEL org.opencontainers.image.source="https://github.com/markeli/ai-agents-tooling" \
 	org.opencontainers.image.description="Claude Code sandbox template for the markeli-agent bot"

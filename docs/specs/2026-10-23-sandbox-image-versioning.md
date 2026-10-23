@@ -142,8 +142,9 @@ Out of scope (non-goals):
 16. Remove the `schedule` trigger, the `force` input, and the `no_cache`/forced logic in the plan script. An existing
     `tree-<hash>` is never rebuilt or overwritten. The build keeps `cache-from`/`cache-to: type=gha`.
 17. Pin every input, each with a `# renovate:` comment that a regex custom manager reads:
-    - `FROM docker/sandbox-templates:claude-code-docker@sha256:<index digest>`, updated by digest. Claude Code's version
-      comes with it;
+    - `FROM docker/sandbox-templates:claude-code-docker-<x.y.z>@sha256:<index digest>`: the template's release tag
+      for a meaningful bump, the digest because Docker Hub tags can be re-pushed. Renovate updates both (a `regex:`
+      versioning for the prefixed tag). Claude Code's version comes with it;
     - `ARG <TOOL>_VERSION` from GitHub releases (glab from GitLab releases): glab, yq, actionlint, hadolint, terraform,
       plannotator;
     - csharp-ls (NuGet); typescript-language-server and typescript (npm, typescript `<7` because 7 ships no `tsserver`);

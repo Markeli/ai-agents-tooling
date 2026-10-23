@@ -31,5 +31,5 @@ The baseline for 1.0.0: the image as it was published from `latest` before versi
 ### Changed
 
 - Every input is pinned and updated through Renovate PRs instead of a weekly rebuild without cache: the base image by
-  digest, the `claude-plugins-official` marketplace by commit, and pnpm, yarn, ansible-core, ansible-lint and
-  claude-agent-sdk by version (previously `latest`/`stable`/unpinned).
+  release tag and digest, the `claude-plugins-official` marketplace by commit, and pnpm, yarn, ansible-core,
+  ansible-lint and claude-agent-sdk by version (previously `latest`/`stable`/unpinned).

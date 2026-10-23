@@ -149,7 +149,7 @@ jobs:
           fi
           {
             docker run --rm --entrypoint /bin/bash "$TREE_TAG" /etc/claude-code/inventory.sh
-            printf 'base image\t%s\n' "$(sed -n 's/^FROM [^@]*@\(sha256:[0-9a-f]*\).*/\1/p' sandbox/image/Dockerfile)"
+            printf 'base image\t%s\n' "$(sed -n 's/^FROM [^:]*:\([^ ]*\).*/\1/p' sandbox/image/Dockerfile)"
           } | LC_ALL=C sort > "$INVENTORY"
           {
             echo '### Toolchain'

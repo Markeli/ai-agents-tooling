@@ -259,7 +259,7 @@ fails the build.
 
 ### Updates through Renovate
 
-Every input of the image is pinned: the base image by digest, tools in `ARG`s by version, the
+Every input of the image is pinned: the base image by release tag and digest, tools in `ARG`s by version, the
 `claude-plugins-official` marketplace and mattpocock skills by commit, GitHub Actions by SHA. The Renovate GitHub
 App (`renovate.json`) opens one grouped PR for all non-major updates on Monday mornings (Europe/Moscow) and a separate
 PR per major. Nothing is automerged. A base digest update rebuilds every layer, which also brings in Ubuntu security
