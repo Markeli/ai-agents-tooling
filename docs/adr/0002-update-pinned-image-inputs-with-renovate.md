@@ -70,8 +70,9 @@ Europe/Moscow, with no automerge. .NET SDK channels stay a manual change.
 
 Renovate PRs don't add CHANGELOG entries. Besides the `postUpgradeTasks` limit, a workflow pushing an entry to
 Renovate's branch would make Renovate treat the PR as edited by someone else and stop rebasing it. Grouped PRs would
-also conflict on the same CHANGELOG lines. Instead, the release check flags Renovate PRs, and the release PR
-summarises the merged updates.
+also conflict on the same CHANGELOG lines. Instead, the release check flags Renovate PRs and shows the toolchain
+changes each one brings (for example, the Claude Code version behind a base digest bump), and the release PR summarises
+the merged updates.
 
 ## Consequences
 
@@ -81,4 +82,4 @@ summarises the merged updates.
 - Negative: the owner must install and trust the Mend app. Security updates now wait for the owner to merge the weekly
   PR and then a release PR. Pinning adds `# renovate:` comments and a few new `ARG`s to the Dockerfile.
 - Follow-ups: the owner installs the app and reviews the onboarding PR. If the hosted app ever allows a command that can
-  write CHANGELOG entries, revisit requirement 19 of the spec.
+  write CHANGELOG entries, revisit requirement 20 of the spec.

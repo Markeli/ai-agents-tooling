@@ -63,6 +63,10 @@ Specifics for an image, which differs from a NuGet package:
 - Git tag `claude-sandbox.v<x.y.z>` (the Curiosus multi-package form, since the repository holds more than the image).
 - `x.y.z` is published by retagging the tree image built in the PR, so the merged image is the one that was reviewed
   and tested. The baked version comes from the CHANGELOG inside the tree, so the retag doesn't make it misleading.
+- The release-check comment is carried over from Curiosus `build.yml` (the `<!-- release-check -->` marker, updated in
+  place, the run summary only for fork PRs). Where Curiosus lists changed packages, it shows the image's state on
+  merge and a table of toolchain changes: the inventory of the PR's image diffed against the release it builds on. A
+  digest bump says nothing to a reviewer; "Claude Code 2.1.309 → 2.1.320" does. Release notes reuse the same table.
 - `sha-<short>` is no longer published; existing tags stay.
 - `release/**` branches and `claude-sandbox.v*` tags are protected by rulesets, because the bot has push access and a
   push to `release/*` publishes.

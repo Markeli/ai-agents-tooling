@@ -56,7 +56,8 @@ Out of scope (non-goals):
 3. SemVer for the image:
    - **major**: something a sandbox or a user relies on is removed or changed incompatibly. Examples: a dropped
      SDK or runtime (like .NET 8), a removed tool or plugin, changed paths of the managed config
-     (`/etc/claude-code/...`), the user or home layout, or the kit contract (ports, environment, credentials the image expects);
+     (`/etc/claude-code/...`), the user or home layout, or the kit contract (ports, environment, credentials the
+     image expects);
    - **minor**: added tools, plugins, rules or templates, or a new major version of a bundled tool;
    - **patch**: minor or patch bumps of pinned inputs, a new base image digest, fixes, and changes to rules and
      templates that don't add any.
@@ -88,7 +89,7 @@ Out of scope (non-goals):
    version. If `M` exists without a parseable version label (images from before 1.0.0), it is moved. `latest` is
    moved only from `main`, never from `release/*`.
 9. The GitHub release `claude-sandbox.v<x.y.z>` is titled `claude-sandbox v<x.y.z>`. Its notes are the CHANGELOG
-   section of that version, followed by the toolchain diff (requirement 22). It carries the inventory as an asset. From
+   section of that version, followed by the toolchain diff (requirement 23). It carries the inventory as an asset. From
    `release/*` it is created with `--latest=false`, and from `main` it is marked Latest.
 10. `release/<major>.x` branches maintain an older major: the release version's major must equal `<major>`, or the
     plan fails. The process mirrors the Curiosus one: create the branch from the last tag of that major, fix on `main`
@@ -121,12 +122,23 @@ Out of scope (non-goals):
     - no image changes (the PR touched only the workflow or scripts).
 
     "Changed" compares the PR merge commit with its first parent (`HEAD^1`), like Curiosus `build.yml`.
+15. Below the state, the same comment shows the **toolchain changes** of the PR: the inventory (requirement 23) of the
+    PR's tree image, diffed against the `inventory.tsv` of the release the merge would build on. That is the release
+    `latest` points at for PRs into `main`, and the highest release of that major for PRs into `release/<major>.x`.
+    The diff is a table `Item | <x.y.z> | This PR` with added, removed and changed rows only, or "no toolchain changes"
+    when there are none. A reviewer of a Renovate PR or a Dockerfile change sees, for example, the Claude Code or
+    plugin versions it brings without reading digests. The inventory runs in the PR's image after the build: a
+    same-repo PR uses the pushed `tree-<hash>`, and a fork PR loads its build into the runner's Docker (`load: true`).
+    If the tree image was already built, it is pulled, not rebuilt. If there is no release yet, or it has no
+    `inventory.tsv` (before 1.0.0), the section lists the full inventory and says there is nothing to diff against.
+    The section is omitted in the "no image changes" state. A failure to produce the diff is reported in the section
+    and, like the rest of the check, never fails the build.
 
 ### Pinned inputs and Renovate
 
-15. Remove the `schedule` trigger, the `force` input, and the `no_cache`/forced logic in the plan script. An existing
+16. Remove the `schedule` trigger, the `force` input, and the `no_cache`/forced logic in the plan script. An existing
     `tree-<hash>` is never rebuilt or overwritten. The build keeps `cache-from`/`cache-to: type=gha`.
-16. Pin every input, each with a `# renovate:` comment that a regex custom manager reads:
+17. Pin every input, each with a `# renovate:` comment that a regex custom manager reads:
     - `FROM docker/sandbox-templates:claude-code-docker@sha256:<index digest>`, updated by digest. Claude Code's version
       comes with it;
     - `ARG <TOOL>_VERSION` from GitHub releases (glab from GitLab releases): glab, yq, actionlint, hadolint, terraform,
@@ -137,10 +149,10 @@ Out of scope (non-goals):
       `@yarnpkg/cli-dist`), `CLAUDE_AGENT_SDK_VERSION`, `ANSIBLE_CORE_VERSION`, `ANSIBLE_LINT_VERSION` (PyPI), used as
       `corepack prepare pnpm@${PNPM_VERSION}`, `uv tool install ansible-core==${ANSIBLE_CORE_VERSION}` and so on;
     - git refs with the `git-refs` datasource, tracking `main` by digest: `MATTPOCOCK_SKILLS_COMMIT`, and a new
-      `CLAUDE_PLUGINS_OFFICIAL_COMMIT` for the `claude-plugins-official` marketplace (requirement 17);
+      `CLAUDE_PLUGINS_OFFICIAL_COMMIT` for the `claude-plugins-official` marketplace (requirement 18);
     - GitHub Actions in all workflows (`sandbox-image.yml`, `codeql.yml`, new ones) pinned to commit SHAs with a
       trailing version comment.
-17. `claude plugin marketplace add` passes a `#<ref>` to `git clone --branch`, so it takes branches and tags but not
+18. `claude plugin marketplace add` passes a `#<ref>` to `git clone --branch`, so it takes branches and tags but not
     commit SHAs. `claude-plugins-official` has no tags, and Claude Code reserves that marketplace name for GitHub
     sources from `anthropics`, so a local checkout can't be added under it. The Dockerfile therefore adds the
     marketplace as today, then fetches and checks out the pinned commit in its clone with
@@ -149,7 +161,7 @@ Out of scope (non-goals):
     runtime updater (non-goal) fast-forward the clone as it does today. Plugins with an external `url` source
     (superpowers, microsoft-docs) carry a `sha` in that marketplace's `marketplace.json`, so the marketplace commit
     pins them too. Plannotator stays pinned by its `#v<version>` tag.
-18. `renovate.json` at the repository root, for the Mend Renovate GitHub App:
+19. `renovate.json` at the repository root, for the Mend Renovate GitHub App:
     - extends `config:recommended`, `docker:pinDigests` and `helpers:pinGitHubActionDigests`;
     - `timezone: Europe/Moscow`, `schedule: ["before 9am on monday"]`;
     - one group for all non-major updates (`minor`, `patch`, `digest`, `pin`, `pinDigest`), named for the sandbox image
@@ -159,21 +171,22 @@ Out of scope (non-goals):
       `git-refs` digests (`# renovate: datasource=git-refs depName=<url> branch=<branch>` above an `ARG X=<sha>`);
     - `packageRules` for `typescript` (`allowedVersions: "<7"`) and Node.js (even majors only);
     - no manager for .NET channels.
-19. Renovate PRs don't edit the CHANGELOG. The Mend-hosted app allows only an undocumented list of `postUpgradeTasks`
+20. Renovate PRs don't edit the CHANGELOG. The Mend-hosted app allows only an undocumented list of `postUpgradeTasks`
     commands, and a workflow committing to Renovate's branch would stop Renovate from rebasing it (ADR 0002). The
-    release check flags these PRs with ⚠️, and the release PR summarises the merged Renovate updates under
+    release check flags these PRs with ⚠️ and shows the toolchain changes they bring (requirement 15), and the
+    release PR summarises the merged Renovate updates under
     `### Changed` (or `### Security`).
 
 ### Version inside the image
 
-20. The plan computes the **baked version** of the tree being built: `x.y.z` if `Unreleased` is empty and `x.y.z` is
+21. The plan computes the **baked version** of the tree being built: `x.y.z` if `Unreleased` is empty and `x.y.z` is
     not yet published, otherwise `<x.y.z>+unreleased.<first 12 characters of the tree hash>` (`0.0.0+…` before the
     first release). CI passes it, the tree hash and the revision as build args `IMAGE_VERSION`, `IMAGE_TREE` and
     `IMAGE_REVISION`. These args are declared after the last `COPY` and used only by the final `RUN`, which writes
     `/etc/claude-code/image-release` (mode 0644, readable by `agent`), so a changed version rebuilds only that layer.
     Because the version comes from the CHANGELOG inside the tree, an image built by the release PR already carries
     `x.y.z`, and a retag on `main` keeps the right version.
-21. OCI labels set by CI: `org.opencontainers.image.version` (the baked version), `org.opencontainers.image.revision`
+22. OCI labels set by CI: `org.opencontainers.image.version` (the baked version), `org.opencontainers.image.revision`
     (`IMAGE_REVISION`), `org.opencontainers.image.created` (build time). `revision` is the commit the tree was built
     from: the PR head SHA for PR builds (the merge preview commit is not kept), the pushed commit for builds on `main`
     or `release/*`. After a retag, `revision` is still the PR head, which may differ from the `main` commit. The `tree`
@@ -183,16 +196,16 @@ Out of scope (non-goals):
 
 ### Visibility
 
-22. `sandbox/image/inventory.sh`, copied to `/etc/claude-code/inventory.sh`, prints one `name<TAB>version` line per
+23. `sandbox/image/inventory.sh`, copied to `/etc/claude-code/inventory.sh`, prints one `name<TAB>version` line per
     item, sorted: Claude Code, each .NET SDK, Node.js, npm, pnpm, yarn, typescript, typescript-language-server,
     csharp-ls, gh, glab, yq, actionlint, hadolint, shellcheck, shfmt, terraform, plannotator, uv, Python,
     ansible-core, ansible-lint, claude-agent-sdk, each installed plugin (version and git commit from
     `installed_plugins.json`), the `claude-plugins-official` and mattpocock skills commits. CI adds the base image
-    digest. Every publish runs it in the image (the runner is arm64, so it runs natively) and writes a Markdown table
-    to the job summary. A release attaches `inventory.tsv` and appends to its notes a diff of changed lines against
-    the `inventory.tsv` of the previous release (the highest `claude-sandbox.v*` release with a lower version, from
-    the same major on `release/*`). If there is no previous release, or it has no inventory, the notes say so.
-23. `sandbox/bin/agent-sandbox` prints, after creating a sandbox or before attaching to one (also with `--no-attach`):
+    digest. Every PR build (requirement 15) and every publish runs it in the image (the runner is arm64, so it runs
+    natively) and writes a Markdown table to the job summary. A release attaches `inventory.tsv` and appends to its
+    notes the same diff table as the PR comment, against the `inventory.tsv` of the previous release (the highest
+    `claude-sandbox.v*` release with a lower version, from the same major on `release/*`). If there is no previous release, or it has no inventory, the notes say so.
+24. `sandbox/bin/agent-sandbox` prints, after creating a sandbox or before attaching to one (also with `--no-attach`):
     `agent-sandbox: <name> runs <image ref>@<digest>, version <VERSION>`. The image ref and digest come from
     `sbx inspect "$name" --json` (field names are confirmed during implementation). `VERSION` comes from
     `sbx exec "$name" cat /etc/claude-code/image-release`. Failing to read either prints `unknown` (or
@@ -200,22 +213,22 @@ Out of scope (non-goals):
 
 ### Cleanup
 
-24. `.github/workflows/sandbox-image-cleanup.yml` runs weekly and on `workflow_dispatch`, with a `dry-run` input. It
+25. `.github/workflows/sandbox-image-cleanup.yml` runs weekly and on `workflow_dispatch`, with a `dry-run` input. It
     deletes package versions of `claude-sandbox` whose `updated_at` is more than 30 days old and that are either
     untagged or tagged only with `tree-*`. It keeps every version tagged with a semver, `latest` or `sha-*`, and every
     manifest referenced by a kept image index, so that the platform and attestation manifests of a kept image are
     never deleted. It lists every deleted and kept version in the job summary.
-25. Token: the workflow uses `GITHUB_TOKEN` with `packages: write`. GitHub allows this when the repository has the
+26. Token: the workflow uses `GITHUB_TOKEN` with `packages: write`. GitHub allows this when the repository has the
     `admin` role on the package. A package first published by a workflow of this repository gets that role; otherwise
     the owner grants it under the package's "Manage Actions access". A 403 fails the job with a message pointing to
     that README section. It never skips silently. A PAT is not needed.
 
 ### Non-functional
 
-26. `shellcheck`, `actionlint`, `hadolint` and `npx --yes --package renovate -- renovate-config-validator` (pinned
+27. `shellcheck`, `actionlint`, `hadolint` and `npx --yes --package renovate -- renovate-config-validator` (pinned
     Renovate version) pass. A `lint` job in `sandbox-image.yml` runs them and the script tests on PRs, and the
     workflow's paths gain `renovate.json` and `.github/scripts/**`.
-27. Third-party content is still fetched only from pinned versions or commits, with checksums where the source
+28. Third-party content is still fetched only from pinned versions or commits, with checksums where the source
     publishes them, as today. Shell scripts quote all external values: CHANGELOG text reaches `gh` only through
     `--notes-file`, never interpolated into a command.
 
@@ -227,6 +240,13 @@ Scenario: PR changes the image with an Unreleased entry
   When the workflow runs
   Then tree-<hash> is built and pushed with version "1.2.0+unreleased.<tree12>"
   And the release-check comment says the change is under Unreleased
+
+Scenario: Renovate PR shows its toolchain changes
+  Given latest is 1.2.0 with an inventory.tsv listing Claude Code 2.1.309
+  And a same-repo Renovate PR bumps the base image digest, which brings Claude Code 2.1.320
+  When the workflow runs
+  Then the release-check comment has a row "Claude Code | 2.1.309 | 2.1.320"
+  And rows for unchanged items are not shown
 
 Scenario: PR changes the image without a CHANGELOG entry
   Given a same-repo PR changes sandbox/image/Dockerfile only
@@ -286,6 +306,9 @@ Scenario: Fork PR
   `publish_tags` (newline-separated tags to point at the tree image), `latest` (whether the GitHub release is marked
   Latest), `release_check` (path of the generated Markdown), `changed`.
 - **Inventory**: `/etc/claude-code/inventory.sh`, stdout `name<TAB>version`, sorted by name, exit 0.
+- **Inventory diff**: `.github/scripts/sandbox-image-inventory-diff.sh <old.tsv|-> <new.tsv> <old version>`, stdout
+  the Markdown table of requirement 15 (`-` for no previous inventory). Used by both the release check and the
+  release notes.
 - **Cleanup**: `.github/scripts/sandbox-image-cleanup.sh`. Inputs `OWNER`, `PACKAGE`, `MAX_AGE_DAYS` (default 30),
   `DRY_RUN`; uses `gh api` and `docker buildx imagetools inspect --raw`.
 
@@ -318,6 +341,8 @@ Scenario: Fork PR
   - `release/1.x` push (moves `1.4`/`1`, not `latest`; release not Latest), and a major mismatch (fails);
   - malformed version heading (fails), no version heading (`0.0.0+unreleased`, no publish);
   - registry error other than "not found" (fails);
+  - inventory diff: changed, added and removed rows; identical inventories ("no toolchain changes"); no previous
+    inventory (full list); the diff target for a PR into `main` (`latest`) and into `release/1.x` (highest 1.x);
   - cleanup: tree-only and untagged versions older than 30 days deleted, newer ones, semver, `latest`, `sha-*` and
     children of kept indexes kept, a 403 fails.
 - The `lint` job runs these tests, `shellcheck` on all scripts, `actionlint`, `hadolint` and the Renovate validator.
