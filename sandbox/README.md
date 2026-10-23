@@ -9,7 +9,7 @@ agent is forwarded.
 sandbox/
 ├── image/                  template image (ghcr.io/markeli/claude-sandbox), built by CI
 │   ├── Dockerfile          .NET 9/10, Node.js LTS, glab, Plannotator, skills, plugins, bot git identity
-│   ├── managed-settings.json  plugins, commit/PR attribution, claude.ai connectors off
+│   ├── managed-settings.json  plugins, commit/PR attribution, Remote Control, claude.ai connectors off
 │   ├── git-hooks/          system core.hooksPath: co-author trailers, chains to repository hooks
 │   ├── CLAUDE.md           bot rules entry point, loaded as managed instructions
 │   ├── rules/              topic rules the entry point tells the bot to read on demand
@@ -127,7 +127,18 @@ host status line (`user / host  path  [branch]  time  | model | ctx: N% used`), 
 `markeli-agent @ <sandbox name>` — the sandbox name comes from `$SANDBOX_NAME`, falling back to the hostname — and
 the path is shown relative to the repository root (`<repo>/sub/dir`) instead of relative to `$HOME`: the workspace is
 mounted at its host path (e.g. `/Users/...`), while `$HOME` in the sandbox is `/home/agent`, so the host's `~`
-substitution never fires there.
+substitution never fires there. The path is bright magenta instead of the host's blue, which is barely readable on a
+dark terminal.
+
+## Remote Control
+
+`remoteControlAtStartup` in `managed-settings.json` connects every interactive session to
+[Remote Control](https://code.claude.com/docs/en/remote-control), so a session started in the sandbox can be continued
+from claude.ai or the Claude mobile app. It needs a claude.ai login (not an API key) on a plan where Remote Control is
+enabled (on Team/Enterprise an Owner turns it on in the Claude Code admin settings); sessions appear under the account
+Claude Code is logged in with. It stays off when `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`, `DISABLE_TELEMETRY`,
+`DO_NOT_TRACK` or `DISABLE_GROWTHBOOK` is set or `ANTHROPIC_BASE_URL` points elsewhere. A repository can opt out with
+`"remoteControlAtStartup": false` in its `.claude/settings.json`; `--rc` / `/remote-control` still work per session.
 
 ## One-time setup (host)
 
