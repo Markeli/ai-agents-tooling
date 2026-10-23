@@ -10,6 +10,8 @@ Personal monorepo for AI agent tooling: skills, MCP servers, Claude plugins, sys
 - `prompts/system/` — System prompts for AI agents
 - `prompts/templates/` — Reusable prompt templates
 - `sandbox/` — Docker Sandbox (sbx) template image, v2 kit and launcher for the `markeli-agent` bot
+- `docs/specs/` — Specs (`YYYY-MM-DD-<slug>.md`), merged before their implementation
+- `docs/adr/` — Architecture decision records (`NNNN-<slug>.md`)
 - `docs/plans/` — Implementation plans and design docs
 
 ## Conventions
