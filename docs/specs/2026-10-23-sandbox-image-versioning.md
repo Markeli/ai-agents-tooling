@@ -204,7 +204,8 @@ Out of scope (non-goals):
     digest. Every PR build (requirement 15) and every publish runs it in the image (the runner is arm64, so it runs
     natively) and writes a Markdown table to the job summary. A release attaches `inventory.tsv` and appends to its
     notes the same diff table as the PR comment, against the `inventory.tsv` of the previous release (the highest
-    `claude-sandbox.v*` release with a lower version, from the same major on `release/*`). If there is no previous release, or it has no inventory, the notes say so.
+    `claude-sandbox.v*` release with a lower version, from the same major on `release/*`). If there is no previous
+    release, or it has no inventory, the notes say so.
 24. `sandbox/bin/agent-sandbox` prints, after creating a sandbox or before attaching to one (also with `--no-attach`):
     `agent-sandbox: <name> runs <image ref>@<digest>, version <VERSION>`. The image ref and digest come from
     `sbx inspect "$name" --json` (field names are confirmed during implementation). `VERSION` comes from
