@@ -7,7 +7,9 @@ KIT := sandbox/kits/markeli-claude
 
 ## image: build the sandbox template image locally
 image:
-	docker build --platform $(PLATFORM) -t $(IMAGE):$(TAG) sandbox/image
+	docker build --platform $(PLATFORM) -t $(IMAGE):$(TAG) \
+		--build-arg IMAGE_TREE=$$(git rev-parse HEAD:sandbox/image) --build-arg IMAGE_REVISION=$$(git rev-parse HEAD) \
+		sandbox/image
 
 ## load: build the image and load it into the sbx runtime (sbx does not share the host Docker image store)
 load: image

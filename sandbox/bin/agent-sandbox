@@ -98,6 +98,25 @@ recreate_sandbox() {
 	fi
 }
 
+# Prints the image and version the sandbox runs; whatever can't be read shows as unknown and never fails the launcher.
+# sbx inspect doesn't document its field names, so this takes the first image reference with a digest it finds.
+print_image() {
+	local inspect image=unknown version=unknown release
+	if command -v jq >/dev/null && inspect=$(sbx inspect "$name" --json 2>/dev/null); then
+		image=$(jq -r '
+			[.. | strings | select(test("@sha256:[0-9a-f]{64}"))][0]
+			// (([.. | objects | to_entries[] | select(.key | test("image"; "i")) | .value | strings | select(startswith("sha256:") | not)][0] // "unknown")
+				+ "@" + ([.. | strings | select(test("^sha256:[0-9a-f]{64}$"))][0] // "unknown"))
+		' <<<"$inspect" 2>/dev/null) || image=unknown
+		[[ $image != unknown@unknown ]] || image=unknown
+	fi
+	# Images from before 1.0.0 have no image-release file
+	if release=$(sbx exec "$name" sh -c 'cat /etc/claude-code/image-release 2>/dev/null || echo VERSION=unversioned' 2>/dev/null); then
+		version=$(sed -n 's/^VERSION=//p' <<<"$release")
+	fi
+	echo "agent-sandbox: $name runs ${image:-unknown}, version ${version:-unknown}"
+}
+
 ensure_bot_agent
 
 if [[ $recreate -eq 1 ]] && sandbox_exists; then
@@ -110,6 +129,8 @@ if ! sandbox_exists; then
 	bind_secret gitlab agent/personal-gitlab
 	sbx create --clone --pull "$pull" --name "$name" "$kit" "$repo"
 fi
+
+print_image
 
 if [[ $no_attach -eq 1 ]]; then
 	echo "agent-sandbox: $name ready (not attached)"

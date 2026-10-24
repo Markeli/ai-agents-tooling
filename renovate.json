@@ -1,0 +1,57 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Updates every pinned input of the sandbox image and of CI; see docs/adr/0002-update-pinned-image-inputs-with-renovate.md",
+  "extends": ["config:recommended", "docker:pinDigests", "helpers:pinGitHubActionDigests"],
+  "timezone": "Europe/Moscow",
+  "schedule": ["before 9am on monday"],
+  "automerge": false,
+  "labels": ["dependencies"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Versions after a \"# renovate: datasource=... depName=...\" comment: Dockerfile ARGs and workflow env values",
+      "managerFilePatterns": ["sandbox/image/Dockerfile", ".github/workflows/*.yml"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)( packageName=(?<packageName>\\S+))?( versioning=(?<versioning>\\S+))?\\s+(ARG \\w+=|\\w+: )\"?(?<currentValue>[^\\s\"]+)\"?"
+      ]
+    },
+    {
+      "customType": "regex",
+      "description": "Git commits after a \"# renovate: datasource=git-refs depName=<url> branch=<branch>\" comment",
+      "managerFilePatterns": ["sandbox/image/Dockerfile"],
+      "matchStrings": [
+        "# renovate: datasource=git-refs depName=(?<depName>\\S+) branch=(?<currentValue>\\S+)\\s+ARG \\w+=(?<currentDigest>[0-9a-f]{40})"
+      ],
+      "datasourceTemplate": "git-refs"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "One weekly PR for all routine updates; majors stay separate",
+      "matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"],
+      "groupName": "sandbox image and CI non-major updates",
+      "groupSlug": "non-major"
+    },
+    {
+      "description": "Tags of these GitHub and GitLab releases carry a v prefix the ARGs don't",
+      "matchDatasources": ["github-releases", "gitlab-releases"],
+      "extractVersion": "^v(?<version>.+)$"
+    },
+    {
+      "description": "Base image release tags carry the flavour as a prefix (claude-code-docker-0.10.0); nightly and test tags don't match",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["docker/sandbox-templates"],
+      "versioning": "regex:^claude-code-docker-(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$"
+    },
+    {
+      "description": "TypeScript 7 is the native compiler and ships no tsserver, which typescript-language-server needs",
+      "matchPackageNames": ["typescript"],
+      "allowedVersions": "<7"
+    },
+    {
+      "description": "NODE_MAJOR follows LTS lines only",
+      "matchDatasources": ["node-version"],
+      "allowedVersions": "/^\\d*[02468](\\.|$)/"
+    }
+  ]
+}

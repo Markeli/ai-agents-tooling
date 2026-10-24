@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# Stub of `docker buildx imagetools` backed by fixture files in $FIXTURE:
+#   registry  "<ref> <digest> [<version label>]" per published tag
+#   errors    refs whose inspect fails with a registry error other than "not found"
+#   format-errors  refs whose inspect fails only when it reads the manifest or the image config (--format)
+#   children  "<digest> <child digest>..." manifests an index references (for --raw)
+#   calls     every create is appended here
+set -euo pipefail
+
+[ "$1 $2" = "buildx imagetools" ] || { echo "docker stub: unsupported: $*" >&2; exit 2; }
+command=$3
+shift 3
+
+case $command in
+inspect)
+	raw=false format=""
+	while [ $# -gt 0 ]; do
+		case $1 in
+		--raw) raw=true ;;
+		--format) format=$2; shift ;;
+		*) ref=$1 ;;
+		esac
+		shift
+	done
+	if grep -qxF "$ref" "$FIXTURE/errors" 2>/dev/null \
+		|| { [ -n "$format" ] && grep -qxF "$ref" "$FIXTURE/format-errors" 2>/dev/null; }; then
+		echo "ERROR: unexpected status from HEAD request to $ref: 401 Unauthorized" >&2
+		exit 1
+	fi
+	if $raw; then
+		digest=${ref##*@}
+		children=$(awk -v d="$digest" '$1 == d { $1 = ""; print }' "$FIXTURE/children" 2>/dev/null || true)
+		tr ' ' '\n' <<<"$children" | jq -R 'select(length > 0) | {digest: .}' | jq -s '{manifests: .}'
+		exit 0
+	fi
+	line=$(awk -v r="$ref" '$1 == r' "$FIXTURE/registry" 2>/dev/null | head -n 1 || true)
+	if [ -z "$line" ]; then
+		echo "ERROR: $ref: not found" >&2
+		exit 1
+	fi
+	read -r _ digest label <<<"$line"
+	case $format in
+	'{{json .Manifest}}') jq -n --arg d "$digest" '{digest: $d}' ;;
+	'{{json .Image}}') jq -n --arg v "${label:-}" '{config: {Labels: (if $v == "" then {} else {"org.opencontainers.image.version": $v} end)}}' ;;
+	*) echo "Name: $ref" ;;
+	esac
+	;;
+create)
+	echo "imagetools create $*" >>"$FIXTURE/calls"
+	# Point every --tag at the source, like the registry would
+	source=${*: -1}
+	read -r _ digest label < <(awk -v r="$source" '$1 == r' "$FIXTURE/registry")
+	while [ $# -gt 1 ]; do
+		if [ "$1" = --tag ]; then
+			awk -v r="$2" '$1 != r' "$FIXTURE/registry" >"$FIXTURE/registry.new"
+			echo "$2 $digest $label" >>"$FIXTURE/registry.new"
+			mv "$FIXTURE/registry.new" "$FIXTURE/registry"
+			shift
+		fi
+		shift
+	done
+	;;
+*)
+	echo "docker stub: unsupported imagetools command $command" >&2
+	exit 2
+	;;
+esac

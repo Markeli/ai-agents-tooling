@@ -1,49 +1,98 @@
 name: sandbox-image
 
+# Builds ghcr.io/<owner>/claude-sandbox once per sandbox/image tree and publishes the version in
+# sandbox/image/CHANGELOG.md from main and release/<major>.x (docs/specs/2026-10-23-sandbox-image-versioning.md).
+# Updates of pinned inputs arrive as Renovate PRs (renovate.json); nothing rebuilds an unchanged tree.
 on:
   push:
-    branches: [main]
+    branches: [main, "release/*"]
     paths:
       - sandbox/image/**
       - .github/workflows/sandbox-image.yml
-      - .github/scripts/sandbox-image-plan.sh
+      - .github/scripts/**
+      - renovate.json
   pull_request:
     paths:
       - sandbox/image/**
+      - sandbox/bin/**
       - .github/workflows/sandbox-image.yml
-      - .github/scripts/sandbox-image-plan.sh
+      - .github/scripts/**
+      - renovate.json
   workflow_dispatch:
-    inputs:
-      force:
-        description: Rebuild without cache even if an image for this sandbox/image tree already exists
-        type: boolean
-        default: false
-  # Weekly rebuild without cache picks up base image and security updates the unchanged tree would never trigger
-  schedule:
-    - cron: "23 4 * * 1"
 
 concurrency:
   group: sandbox-image-${{ github.ref }}
-  # Only PR runs are superseded by newer pushes; a main or scheduled run always finishes publishing
+  # Only PR runs are superseded by newer pushes; a main or release run always finishes publishing
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions: {}
 
 env:
   IMAGE: ghcr.io/${{ github.repository_owner }}/claude-sandbox
 
 jobs:
-  build:
-    # sbx on Apple silicon runs arm64 microVMs; a native arm64 runner avoids QEMU
+  lint:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      # renovate: datasource=npm depName=renovate
+      RENOVATE_VERSION: 44.181.0
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Test the workflow scripts
+        run: .github/scripts/tests/run.sh
+
+      - name: shellcheck
+        run: shellcheck -x .github/scripts/*.sh .github/scripts/tests/run.sh .github/scripts/tests/stubs/* sandbox/image/*.sh sandbox/image/git-hooks/* sandbox/bin/agent-sandbox
+
+      - name: actionlint
+        uses: docker://rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
+        with:
+          args: -color
+
+      - name: hadolint
+        uses: docker://hadolint/hadolint:v2.15.1@sha256:32dac94127fd60b7b7e3fbfc65e1383b9b5e25c9bfd7b8536de7a539fe68a12d
+        with:
+          args: /bin/hadolint sandbox/image/Dockerfile
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+
+      - name: Validate renovate.json
+        run: npx --yes --package "renovate@${RENOVATE_VERSION}" -- renovate-config-validator --strict
+
+  image:
+    # sbx on Apple silicon runs arm64 microVMs; a native arm64 runner avoids QEMU and runs the inventory natively
     runs-on: ubuntu-24.04-arm
     permissions:
       contents: read
       packages: write
+    outputs:
+      build: ${{ steps.plan.outputs.build }}
+      tree_tag: ${{ steps.plan.outputs.tree_tag }}
+      publish: ${{ steps.plan.outputs.publish }}
+      release: ${{ steps.plan.outputs.release }}
+      publish_tags: ${{ steps.plan.outputs.publish_tags }}
+      latest: ${{ steps.plan.outputs.latest }}
+      changed: ${{ steps.plan.outputs.changed }}
+      inventory: ${{ steps.inventory.outcome }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The merge commit and its parents: HEAD^1 is the base branch, for the release check
+          fetch-depth: 2
+          persist-credentials: false
 
-      - uses: docker/setup-buildx-action@v4
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       # Fork PRs get a read-only token and no secrets, so they build without registry access
-      - uses: docker/login-action@v4
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
         with:
           registry: ghcr.io
@@ -51,61 +100,222 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - id: plan
-        name: Decide whether to build, retag or skip
+        name: Decide what to build and publish
         env:
           EVENT: ${{ github.event_name }}
           REF: ${{ github.ref }}
-          # Matches on.push.branches; a schedule event's payload carries no repository.default_branch
-          DEFAULT_BRANCH: main
+          BASE_REF: ${{ github.base_ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           SHA: ${{ github.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           SAME_REPO: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
-          FORCE: ${{ inputs.force }}
-        run: .github/scripts/sandbox-image-plan.sh
+          RELEASE_CHECK: ${{ runner.temp }}/release-check.md
+        run: |
+          .github/scripts/sandbox-image-plan.sh
+          echo "created=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
 
-      - uses: docker/build-push-action@v7
-        if: steps.plan.outputs.action == 'build'
+      # load keeps the image in the runner's Docker for the inventory; the build args only reach the last layer
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        if: steps.plan.outputs.build == 'true'
         with:
           context: sandbox/image
           platforms: linux/arm64
-          pull: true
-          no-cache: ${{ steps.plan.outputs.no_cache == 'true' }}
           push: ${{ steps.plan.outputs.push == 'true' }}
-          tags: ${{ steps.plan.outputs.tags }}
-          labels: org.opencontainers.image.revision=${{ github.sha }}
+          load: true
+          tags: ${{ steps.plan.outputs.tree_tag }}
+          build-args: |
+            IMAGE_VERSION=${{ steps.plan.outputs.version }}
+            IMAGE_TREE=${{ steps.plan.outputs.tree }}
+            IMAGE_REVISION=${{ steps.plan.outputs.revision }}
+          labels: |
+            org.opencontainers.image.version=${{ steps.plan.outputs.version }}
+            org.opencontainers.image.revision=${{ steps.plan.outputs.revision }}
+            org.opencontainers.image.created=${{ steps.plan.outputs.created }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Retag the existing tree image
-        if: steps.plan.outputs.action == 'retag'
+      # Needed by the release check of a PR that changes the image, and by every publish. A PR never fails on it.
+      - id: inventory
+        name: List the toolchain of the image
+        if: steps.plan.outputs.publish == 'true' || (github.event_name == 'pull_request' && steps.plan.outputs.changed == 'true')
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
         env:
+          BUILT: ${{ steps.plan.outputs.build }}
           TREE_TAG: ${{ steps.plan.outputs.tree_tag }}
-          TAGS: ${{ steps.plan.outputs.tags }}
+          INVENTORY: ${{ runner.temp }}/inventory.tsv
         run: |
-          args=()
-          while read -r tag; do
-            if [ "$tag" != "$TREE_TAG" ]; then
-              args+=(--tag "$tag")
-            fi
-          done <<< "$TAGS"
-          docker buildx imagetools create "${args[@]}" "$TREE_TAG"
+          if [ "$BUILT" != true ]; then
+            docker pull --quiet --platform linux/arm64 "$TREE_TAG"
+          fi
+          {
+            docker run --rm --entrypoint /bin/bash "$TREE_TAG" /etc/claude-code/inventory.sh
+            printf 'base image\t%s\n' "$(sed -n 's/^FROM [^:]*:\([^ ]*\).*/\1/p' sandbox/image/Dockerfile)"
+          } | LC_ALL=C sort > "$INVENTORY"
+          {
+            echo '### Toolchain'
+            echo
+            .github/scripts/sandbox-image-inventory-diff.sh - "$INVENTORY" "" "$TREE_TAG" | tail -n +3
+          } >> "$GITHUB_STEP_SUMMARY"
 
-      # Surfaces the immutable sha-<short> tag so it can be copied into a kit's `image:` pin
-      # (see sandbox/README.md, "Image versioning") without digging through the GHCR package page.
-      - name: Summarize published tags
-        if: steps.plan.outputs.push == 'true'
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sandbox-image
+          path: |
+            ${{ runner.temp }}/inventory.tsv
+            ${{ runner.temp }}/release-check.md
+          if-no-files-found: ignore
+
+      - name: Summarize
         env:
-          ACTION: ${{ steps.plan.outputs.action }}
+          BUILD: ${{ steps.plan.outputs.build }}
+          PUSH: ${{ steps.plan.outputs.push }}
           TREE_TAG: ${{ steps.plan.outputs.tree_tag }}
-          TAGS: ${{ steps.plan.outputs.tags }}
+          VERSION: ${{ steps.plan.outputs.version }}
+          PUBLISH: ${{ steps.plan.outputs.publish }}
+          RELEASE: ${{ steps.plan.outputs.release }}
+          NOTES: ${{ steps.plan.outputs.notes }}
         run: |
           {
-            if [ "$ACTION" = skip ]; then
-              echo '### Image unchanged, nothing published'
-              echo "\`$TREE_TAG\` already exists."
+            echo '### Image'
+            echo
+            if [ "$BUILD" = true ]; then
+              echo "Built \`$TREE_TAG\` as version \`$VERSION\`$([ "$PUSH" = true ] || echo ' (not pushed: fork PR)')."
             else
-              echo "### Published image tags ($ACTION)"
-              echo '```'
-              echo "$TAGS"
-              echo '```'
+              echo "\`$TREE_TAG\` already exists; not rebuilt."
             fi
+            if [ "$PUBLISH" = true ]; then
+              echo
+              echo "Publishing **$RELEASE**."
+            fi
+            if [ -n "$NOTES" ]; then
+              echo
+              echo "$NOTES"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  release-check:
+    needs: image
+    if: github.event_name == 'pull_request' && !cancelled()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        id: download
+        continue-on-error: true
+        with:
+          name: sandbox-image
+          path: ${{ runner.temp }}/sandbox-image
+
+      - id: check
+        name: Release check
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          BASE_REF: ${{ github.base_ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          CHANGED: ${{ needs.image.outputs.changed }}
+          INVENTORY_OUTCOME: ${{ needs.image.outputs.inventory }}
+          DIR: ${{ runner.temp }}/sandbox-image
+        run: |
+          body=$DIR/release-check.md
+          if [ ! -f "$body" ]; then
+            printf '<!-- release-check -->\n### Release check\n\n⚠️ The image job failed before the check; see the run.\n' > "$body"
+          fi
+          if [ "$CHANGED" = true ]; then
+            {
+              echo
+              echo '#### Toolchain changes'
+              echo
+              # The release the merge builds on: the newest overall into main, the newest of the major into release/<major>.x
+              major=""
+              if [[ $BASE_REF =~ ^release/([0-9]+)\.x$ ]]; then
+                major=${BASH_REMATCH[1]}
+              fi
+              if [ "$INVENTORY_OUTCOME" != success ] || [ ! -f "$DIR/inventory.tsv" ]; then
+                echo '⚠️ The inventory of the image could not be produced; see the image job.'
+              elif ! (. .github/scripts/sandbox-image-lib.sh && toolchain_changes "$DIR/inventory.tsv" "$(previous_release "" "$major")" 'This PR'); then
+                echo '⚠️ The toolchain changes could not be computed; see the release-check job.'
+              fi
+            } >> "$body"
+          fi
+          cat "$body" >> "$GITHUB_STEP_SUMMARY"
+          echo "body=$body" >> "$GITHUB_OUTPUT"
+
+      # Fork PRs have a read-only token: they get the run summary only
+      - name: Comment on the pull request
+        if: steps.check.outcome == 'success' && github.event.pull_request.head.repo.full_name == github.repository
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          CHANGED: ${{ needs.image.outputs.changed }}
+          BODY: ${{ steps.check.outputs.body }}
+        run: |
+          printf '\n<sub>For %s.</sub>\n' "$HEAD_SHA" >> "$BODY"
+          id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" --paginate \
+            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- release-check -->"))) | .id' \
+            | head -n 1)
+          if [ -n "$id" ]; then
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -F "body=@$BODY" --silent
+          elif [ "$CHANGED" = "true" ]; then
+            gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file "$BODY"
+          fi
+
+  publish:
+    needs: image
+    if: github.event_name == 'push' && needs.image.outputs.publish == 'true'
+    runs-on: ubuntu-24.04-arm
+    # main and release/* publish one at a time: moving tags and releases are compared against what is published
+    concurrency:
+      group: sandbox-image-publish
+      cancel-in-progress: false
+    permissions:
+      contents: write # git tag and GitHub release
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: sandbox-image
+          path: ${{ runner.temp }}/sandbox-image
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TREE_TAG: ${{ needs.image.outputs.tree_tag }}
+          RELEASE: ${{ needs.image.outputs.release }}
+          PUBLISH_TAGS: ${{ needs.image.outputs.publish_tags }}
+          LATEST: ${{ needs.image.outputs.latest }}
+          SHA: ${{ github.sha }}
+          INVENTORY: ${{ runner.temp }}/sandbox-image/inventory.tsv
+        run: |
+          .github/scripts/sandbox-image-publish.sh
+          {
+            echo "### Published claude-sandbox $RELEASE"
+            echo
+            echo '```'
+            echo "${PUBLISH_TAGS:-no image tags moved}"
+            echo '```'
+            echo
+            echo "Release: https://github.com/$GITHUB_REPOSITORY/releases/tag/claude-sandbox.v$RELEASE"
           } >> "$GITHUB_STEP_SUMMARY"
