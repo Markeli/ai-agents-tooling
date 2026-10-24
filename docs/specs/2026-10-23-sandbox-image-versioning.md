@@ -63,9 +63,9 @@ Out of scope (non-goals):
      templates that don't add any.
 
    Breaking entries get a `**Breaking:**` note with what to change. The same rules go into `sandbox/README.md`.
-4. Bootstrap: the implementation PR adds the CHANGELOG with only an `## [Unreleased]` section. It describes the current
-   image as the 1.0.0 baseline (toolchain, plugins, skills, managed config) plus the pinning changes. A separate
-   release PR turns it into `## [1.0.0] - <date>`, and its merge publishes 1.0.0 through the new flow.
+4. Bootstrap: the implementation PR adds the CHANGELOG with a `## [1.0.0] - <date>` section that describes the current
+   image (toolchain, plugins, skills, managed config) plus the pinning changes, so its merge publishes 1.0.0 through
+   the new flow (owner's decision in the implementation PR, instead of a separate release PR).
 
 ### Release flow
 
@@ -369,13 +369,11 @@ Scenario: Fork PR
 ## Rollout
 
 1. This spec PR. Then an implementation PR from the updated `main`: pinning, `renovate.json`, workflow and scripts,
-   tests, inventory, `image-release`, launcher, cleanup, README and `CLAUDE.md`, and a CHANGELOG with `Unreleased` only.
-   Its merge publishes nothing, so `latest` stays the last weekly image until 1.0.0.
+   tests, inventory, `image-release`, launcher, cleanup, README and `CLAUDE.md`, and a CHANGELOG with `## [1.0.0]`.
+   Its merge publishes 1.0.0, 1.0, 1 and `latest`, the git tag `claude-sandbox.v1.0.0` and the GitHub release.
 2. The owner installs the Mend Renovate GitHub App on the repository, creates the two rulesets from the README, and
    checks that the package grants the repository the admin role.
-3. A release PR turns `Unreleased` into `## [1.0.0]`. Its merge publishes 1.0.0, 1.0, 1 and `latest`, the git tag and
-   the GitHub release.
-4. The owner checks the Renovate onboarding PR and the first grouped update PR.
+3. The owner checks the Renovate onboarding PR and the first grouped update PR.
 
 Existing sandboxes are unaffected: the image is resolved once at `sbx create`. Existing `sha-*` and `tree-*` tags stay,
 and the cleanup removes only `tree-*` and untagged versions.
