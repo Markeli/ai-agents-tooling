@@ -4,6 +4,13 @@ All notable changes to the `ghcr.io/markeli/claude-sandbox` image. The format fo
 [Keep a Changelog](https://keepachangelog.com), and versions follow the image SemVer rules in
 [`sandbox/README.md`](../README.md#image-versioning): the first `## [x.y.z]` section is the image version.
 
+## [Unreleased]
+
+### Changed
+
+- Pinned tools updated: `glab` 1.124.0, `terraform` 1.17.0, Plannotator 0.28.29 (binary, plugin and
+  `/plannotator-*` skills), `claude-agent-sdk` 0.2.174, and the mattpocock skills to commit `5beb35b`.
+
 ## [1.0.0] - 2026-10-24
 
 The first versioned release: the image as it was published from `latest` before versioning, plus the pinning below.
