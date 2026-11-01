@@ -107,7 +107,8 @@ Details:
   #10, #9 and #13 follow in C#. The #10 implementation PR updates the bash-specific details in its spec, such as line
   references and `jq`.
 - **CI.** A workflow runs on changes under `sandbox/cli/**` (and on its own changes). It runs the Cake `Default`
-  and `Format` targets on `ubuntu-latest`. The tests don't touch the OS because processes are faked. The real run against `sbx` stays with the owner, as it does today.
+  and `Format` targets on `ubuntu-latest`. The tests don't touch the OS because processes are faked. The real run
+  against `sbx` stays with the owner, as it does today.
 
 Out of scope: the bash scripts in `.github/scripts/`. They run in Linux CI and are covered by their own tests.
 
@@ -119,8 +120,8 @@ Out of scope: the bash scripts in `.github/scripts/`. They run in Linux CI and a
   - Windows and Linux become implementations of two interfaces rather than a new launcher.
   - The kit and the launcher are released together.
 - Negative:
-  - The tool must be reinstalled (`dotnet cake --target=Install`) after changes. A `git pull` alone no longer updates it, and an
-    old install keeps an old kit.
+  - The tool must be reinstalled (`dotnet cake --target=Install`) after changes. A `git pull` alone no longer
+    updates it, and an old install keeps an old kit.
   - The .NET SDK is a host prerequisite.
   - The port PR changes how the owner starts the launcher: `agent-sandbox ...` from `PATH` instead of
     `sandbox/bin/agent-sandbox ...`.
