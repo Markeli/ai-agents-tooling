@@ -66,9 +66,11 @@ ensure_bot_agent() {
 }
 
 bind_secret() {
-	local service=$1 item=$2
+	local service=$1 item=$2 out
 	security find-generic-password -s "$item" >/dev/null 2>&1 || die "keychain item $item not found"
-	sbx secret set "$service" --sandbox "$name" --command "/usr/bin/security find-generic-password -s $item -w" >/dev/null
+	# sbx reports success on stderr with colour codes that come out garbled when stdout isn't a terminal: show it only on failure
+	out=$(sbx secret set "$service" --sandbox "$name" --command "/usr/bin/security find-generic-password -s $item -w" 2>&1) \
+		|| die "cannot set secret $service for $name: $out"
 }
 
 sandbox_exists() {
