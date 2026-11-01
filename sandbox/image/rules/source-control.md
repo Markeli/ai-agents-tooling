@@ -35,6 +35,10 @@ BREAKING CHANGE: <what breaks and how to migrate>
   libraries the title's type matches the version bump it causes.
 - The description says what changed, why, how it was verified (which commands, which target frameworks), and what
   was not verified.
+- Assign the PR/MR to yourself (`markeli-agent`) and request review from the owner (GitHub `Markeli`, GitLab
+  `markeli`): `gh pr create --assignee markeli-agent --reviewer Markeli ...`,
+  `glab mr create --assignee markeli-agent --reviewer markeli ...`. If either can't be set, say so instead of
+  dropping it silently.
 - Reply to review comments in their threads; push fixes as new commits.
 
 ## CI workflows
