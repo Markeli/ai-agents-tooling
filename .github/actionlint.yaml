@@ -1,0 +1,4 @@
+# GitHub-hosted runner labels newer than the pinned actionlint knows; drop each once actionlint lists it
+self-hosted-runner:
+  labels:
+    - ubuntu-26.04-arm
