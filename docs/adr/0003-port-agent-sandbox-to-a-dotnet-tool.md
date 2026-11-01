@@ -89,8 +89,15 @@ Details:
   extracted per tool version under the user's local application data (`~/.local/share/agent-sandbox/kits/<version>/`
   on macOS and Linux). The kit is versioned together with the code that relies on it. `AGENT_SANDBOX_KIT` still
   overrides it, for example to try a kit from a working tree.
-- **Install from the checkout, no feed.** `make install-cli` packs the tool into `sandbox/cli/artifacts/` and runs
-  `dotnet tool update -g AgentSandbox --add-source sandbox/cli/artifacts`. That command installs or upgrades. There is
+- **Build with Cake.** `sandbox/cli/build.cake` is the one build script, for local runs and for CI. Its task names
+  follow the Curiosus `curiosus.cake`: `Clean`, `Build`, `Test`, `Default` (build and test) and `Pack`. It adds
+  `Format`, which runs `dotnet format --verify-no-changes`, and `Install`. `Cake.Tool` is pinned in
+  `sandbox/cli/.config/dotnet-tools.json`, and Renovate's `nuget` manager updates it. Run it from `sandbox/cli`:
+  `dotnet tool restore && dotnet cake --target=<Task>`. The repository doesn't take the synced `curiosus.cake`:
+  that script is built for Curiosus libraries, with nuget.org push, coverage badges and the Curiosus release flow,
+  and syncing it would also bring the root `.editorconfig`, workflows and `.claude/curiosus.md` into this monorepo.
+- **Install from the checkout, no feed.** `dotnet cake --target=Install` packs the tool into `sandbox/cli/artifacts/`
+  and runs `dotnet tool update -g AgentSandbox --add-source artifacts`. That command installs or upgrades. There is
   no NuGet.org or GitHub Packages publishing. The tool hard-codes one owner's bot, key and keychain names, so it is not
   meant for other users, and GitHub Packages needs a token even to read. Revisit this when a second machine needs
   the tool (#28).
@@ -99,9 +106,8 @@ Details:
   messages and the exit codes. It replaces `sandbox/bin/agent-sandbox` and updates `sandbox/README.md`.
   #10, #9 and #13 follow in C#. The #10 implementation PR updates the bash-specific details in its spec, such as line
   references and `jq`.
-- **CI.** A workflow runs on changes under `sandbox/cli/**` (and on its own changes). It runs `dotnet build` with
-  warnings as errors, `dotnet test` and `dotnet format --verify-no-changes` on `ubuntu-latest`. The tests don't touch
-  the OS because processes are faked. The real run against `sbx` stays with the owner, as it does today.
+- **CI.** A workflow runs on changes under `sandbox/cli/**` (and on its own changes). It runs the Cake `Default`
+  and `Format` targets on `ubuntu-latest`. The tests don't touch the OS because processes are faked. The real run against `sbx` stays with the owner, as it does today.
 
 Out of scope: the bash scripts in `.github/scripts/`. They run in Linux CI and are covered by their own tests.
 
@@ -113,13 +119,13 @@ Out of scope: the bash scripts in `.github/scripts/`. They run in Linux CI and a
   - Windows and Linux become implementations of two interfaces rather than a new launcher.
   - The kit and the launcher are released together.
 - Negative:
-  - The tool must be reinstalled (`make install-cli`) after changes. A `git pull` alone no longer updates it, and an
+  - The tool must be reinstalled (`dotnet cake --target=Install`) after changes. A `git pull` alone no longer updates it, and an
     old install keeps an old kit.
   - The .NET SDK is a host prerequisite.
   - The port PR changes how the owner starts the launcher: `agent-sandbox ...` from `PATH` instead of
     `sandbox/bin/agent-sandbox ...`.
   - The rewrite costs about a day before #10 can start.
 - Follow-ups:
-  - the port PR, with tests, CI workflow, `make install-cli` and the README;
+  - the port PR, with tests, `build.cake`, the CI workflow and the README;
   - then #10, #9 and #13 on top of it;
   - #28 adds the Windows implementations and the amd64 image.
