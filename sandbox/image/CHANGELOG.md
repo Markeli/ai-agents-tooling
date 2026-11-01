@@ -10,6 +10,7 @@ All notable changes to the `ghcr.io/markeli/claude-sandbox` image. The format fo
 
 - Pinned tools updated: `glab` 1.124.0, `terraform` 1.17.0, Plannotator 0.28.29 (binary, plugin and
   `/plannotator-*` skills), `claude-agent-sdk` 0.2.174, and the mattpocock skills to commit `5beb35b`.
+- Source control rules: the bot assigns its PRs/MRs to itself (`markeli-agent`) and requests review from the owner.
 
 ## [1.0.0] - 2026-10-24
 
