@@ -4,7 +4,7 @@ All notable changes to the `ghcr.io/markeli/claude-sandbox` image. The format fo
 [Keep a Changelog](https://keepachangelog.com), and versions follow the image SemVer rules in
 [`sandbox/README.md`](../README.md#image-versioning): the first `## [x.y.z]` section is the image version.
 
-## [Unreleased]
+## [1.0.1] - 2026-11-01
 
 ### Changed
 
