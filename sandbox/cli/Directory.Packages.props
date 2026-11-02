@@ -1,0 +1,13 @@
+<Project>
+	<PropertyGroup>
+		<ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+	</PropertyGroup>
+	<ItemGroup>
+		<PackageVersion Include="System.CommandLine" Version="2.0.14" />
+	</ItemGroup>
+	<ItemGroup Label="Tests">
+		<!-- 8.x is licensed for non-commercial use only; renovate.json keeps it below 8 -->
+		<PackageVersion Include="FluentAssertions" Version="7.2.2" />
+		<PackageVersion Include="xunit.v3" Version="4.0.2" />
+	</ItemGroup>
+</Project>
