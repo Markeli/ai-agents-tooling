@@ -2,7 +2,7 @@ using System.CommandLine;
 
 namespace AgentSandbox;
 
-/// <summary>The command line: <c>agent-sandbox [--no-attach] [--recreate] [--yes] [--name NAME] [REPO_PATH] [-- ARGS...]</c>.</summary>
+/// <summary>Runs <see cref="LauncherCommand"/> for a command line, with Claude Code's arguments after <c>--</c>.</summary>
 internal static class Cli
 {
 	private const string Separator = "--";
@@ -23,63 +23,7 @@ internal static class Cli
 		var own = separator < 0 ? args : args[..separator];
 		var agentArguments = separator < 0 ? [] : args[(separator + 1)..];
 
-		var noAttach = new Option<bool>("--no-attach") { Description = "Create the sandbox if needed, but don't attach to it" };
-		var recreate = new Option<bool>("--recreate")
-		{
-			Description = "Remove and recreate the sandbox (refused while it has commits not pushed to origin)",
-		};
-		var yes = new Option<bool>("--yes") { Description = "With --recreate, skip the confirmation of sbx rm" };
-		var name = new Option<string>("--name")
-		{
-			Description = "Sandbox name (lowercase letters, digits, hyphens); defaults to the repository directory name",
-		};
-		var repo = new Argument<string>("REPO_PATH")
-		{
-			Description = "The repository, or a directory inside it",
-			Arity = ArgumentArity.ZeroOrOne,
-			DefaultValueFactory = _ => ".",
-		};
-		// System.CommandLine takes an option-like token as a value: --name --recreate would name the sandbox
-		// "--recreate", and a mistyped --flag would become the repository path
-		name.Validators.Add(result =>
-		{
-			if (result.Tokens.FirstOrDefault()?.Value is { } value && value.StartsWith('-'))
-			{
-				result.AddError($"--name needs a value, got the option '{value}'");
-			}
-		});
-		repo.Validators.Add(result =>
-		{
-			if (result.Tokens.FirstOrDefault()?.Value is { } value && value.StartsWith('-'))
-			{
-				result.AddError($"unknown option '{value}' (write ./{value} for a path)");
-			}
-		});
-		var command = new RootCommand(
-			"Creates (once) and attaches to a clone-mode sandbox for a repository, running Claude Code as markeli-agent. "
-			+ "Arguments after -- go to Claude Code.")
-		{
-			noAttach, recreate, yes, name, repo,
-		};
-		command.SetAction(async (result, token) =>
-		{
-			var chosenName = result.GetValue(name);
-			if (chosenName is { Length: 0 })
-			{
-				throw new LauncherException("--name must not be empty; omit --name to use the repo-derived name");
-			}
-
-			var options = new LauncherOptions
-			{
-				RepoPath = result.GetValue(repo) ?? ".",
-				Name = chosenName,
-				NoAttach = result.GetValue(noAttach),
-				Recreate = result.GetValue(recreate),
-				Yes = result.GetValue(yes),
-				AgentArguments = agentArguments,
-			};
-			return await run(options, token);
-		});
+		var command = new LauncherCommand(run, agentArguments, output).Root;
 
 		// A repository path starting with @ is a path, not a response file
 		var parsed = command.Parse(own, new ParserConfiguration { ResponseFileTokenReplacer = null });

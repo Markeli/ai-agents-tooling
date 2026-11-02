@@ -195,6 +195,7 @@ agent-sandbox ~/Development/Personal/<repo>      # create once, then attach
 agent-sandbox . -- -c                            # pass extra Claude Code args
 agent-sandbox --no-attach ~/Development/Personal/<repo>   # create/ensure, don't attach
 agent-sandbox --recreate ~/Development/Personal/<repo>    # see "Update or recreate a sandbox"
+agent-sandbox help                                       # all options (same as --help)
 ```
 
 The first run asks to approve the kit's credentials (`anthropic`, `github`, `gitlab`); approvals are stored in

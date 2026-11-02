@@ -40,6 +40,27 @@ public sealed class CliTests
 	}
 
 	[Fact]
+	public async Task Help_command_prints_the_same_help_as_the_option()
+	{
+		(await InvokeAsync("--help")).Should().Be(0);
+		var optionHelp = _output.ToString();
+		_output.GetStringBuilder().Clear();
+
+		(await InvokeAsync("help")).Should().Be(0);
+
+		_output.ToString().Should().Be(optionHelp).And.Contain("Usage:").And.Contain("--recreate").And.Contain("help");
+		_options.Should().BeNull();
+	}
+
+	[Fact]
+	public async Task Takes_a_directory_named_help_written_as_a_path()
+	{
+		(await InvokeAsync("./help")).Should().Be(0);
+
+		_options!.RepoPath.Should().Be("./help");
+	}
+
+	[Fact]
 	public async Task Rejects_an_empty_name()
 	{
 		(await InvokeAsync("--name", "")).Should().Be(1);
