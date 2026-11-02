@@ -27,6 +27,9 @@ Personal monorepo for AI agent tooling: skills, MCP servers, Claude plugins, sys
 - Sandbox image CI scripts (`.github/scripts/`): tests are `.github/scripts/tests/run.sh` (stubs for `docker`/`gh`,
   real throwaway git repos); the PR `lint` job of `sandbox-image.yml` also runs shellcheck, actionlint, hadolint and
   the Renovate validator.
+- `agent-sandbox` launcher (`sandbox/cli`): run `dotnet tool restore && dotnet cake` there (Default: build and test;
+  `--target=Format` checks formatting). `global.json` selects Microsoft.Testing.Platform (xunit.v3), so a plain
+  `dotnet test` needs `--solution AgentSandbox.slnx`.
 - In the sandbox, shellcheck dies with `commitBuffer: invalid argument` on files with emoji unless the locale is
   UTF-8: run `LC_ALL=C.UTF-8 shellcheck -x ...`.
 - `renovate --platform=local --dry-run=extract` (via `npx --package renovate@<version> --`) only sees git-tracked

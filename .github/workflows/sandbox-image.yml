@@ -14,7 +14,6 @@ on:
   pull_request:
     paths:
       - sandbox/image/**
-      - sandbox/bin/**
       - .github/workflows/sandbox-image.yml
       - .github/scripts/**
       - renovate.json
@@ -48,7 +47,7 @@ jobs:
         run: .github/scripts/tests/run.sh
 
       - name: shellcheck
-        run: shellcheck -x .github/scripts/*.sh .github/scripts/tests/run.sh .github/scripts/tests/stubs/* sandbox/image/*.sh sandbox/image/git-hooks/* sandbox/bin/agent-sandbox
+        run: shellcheck -x .github/scripts/*.sh .github/scripts/tests/run.sh .github/scripts/tests/stubs/* sandbox/image/*.sh sandbox/image/git-hooks/*
 
       - name: actionlint
         uses: docker://rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667

@@ -49,6 +49,11 @@
       "allowedVersions": "<7"
     },
     {
+      "description": "FluentAssertions 8 is licensed for non-commercial use only; the agent-sandbox tests stay on 7",
+      "matchPackageNames": ["FluentAssertions"],
+      "allowedVersions": "<8"
+    },
+    {
       "description": "NODE_MAJOR follows LTS lines only",
       "matchDatasources": ["node-version"],
       "allowedVersions": "/^\\d*[02468](\\.|$)/"

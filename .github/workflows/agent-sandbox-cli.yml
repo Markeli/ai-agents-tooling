@@ -1,0 +1,53 @@
+name: agent-sandbox-cli
+
+# Builds, tests and packs the agent-sandbox .NET tool with its Cake script, and checks its formatting
+# (docs/adr/0003-port-agent-sandbox-to-a-dotnet-tool.md). The kit is embedded in the tool, so kit changes run it too.
+on:
+  push:
+    branches: [main]
+    paths:
+      - sandbox/cli/**
+      - sandbox/kits/**
+      - .github/workflows/agent-sandbox-cli.yml
+  pull_request:
+    paths:
+      - sandbox/cli/**
+      - sandbox/kits/**
+      - .github/workflows/agent-sandbox-cli.yml
+  workflow_dispatch:
+
+concurrency:
+  group: agent-sandbox-cli-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+env:
+  DOTNET_NOLOGO: "true"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: sandbox/cli
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: sandbox/cli/global.json
+
+      - name: Restore Cake
+        run: dotnet tool restore
+
+      - name: Build, test and pack
+        run: dotnet cake --target=Pack
+
+      - name: Check formatting
+        run: dotnet cake --target=Format
