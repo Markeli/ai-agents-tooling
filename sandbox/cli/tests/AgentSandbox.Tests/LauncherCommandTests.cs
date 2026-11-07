@@ -1,6 +1,6 @@
 namespace AgentSandbox.Tests;
 
-public sealed class CliTests
+public sealed class LauncherCommandTests
 {
 	private readonly StringWriter _output = new();
 	private readonly StringWriter _error = new();
@@ -29,6 +29,14 @@ public sealed class CliTests
 			Yes = true,
 			AgentArguments = ["-c", "--", "--name", "x"],
 		});
+	}
+
+	[Fact]
+	public async Task Keeps_arguments_after_the_separator_out_of_the_repository_path()
+	{
+		(await InvokeAsync("--", "--resume", "x")).Should().Be(0);
+
+		_options.Should().BeEquivalentTo(new LauncherOptions { AgentArguments = ["--resume", "x"] });
 	}
 
 	[Fact]
@@ -95,7 +103,7 @@ public sealed class CliTests
 	[Fact]
 	public async Task Prints_a_launcher_error_with_the_tool_prefix_and_returns_its_exit_code()
 	{
-		var exitCode = await Cli.InvokeAsync(
+		var exitCode = await LauncherCommand.InvokeAsync(
 			[], (_, _) => throw new LauncherException("cannot start sandbox-app", 3), _output, _error, CancellationToken.None);
 
 		exitCode.Should().Be(3);
@@ -105,7 +113,7 @@ public sealed class CliTests
 	[Fact]
 	public async Task Prints_nothing_for_an_error_another_program_already_reported()
 	{
-		var exitCode = await Cli.InvokeAsync(
+		var exitCode = await LauncherCommand.InvokeAsync(
 			[], (_, _) => throw LauncherException.ExitWith(128), _output, _error, CancellationToken.None);
 
 		exitCode.Should().Be(128);
@@ -113,7 +121,7 @@ public sealed class CliTests
 	}
 
 	private Task<int> InvokeAsync(params string[] args) =>
-		Cli.InvokeAsync(
+		LauncherCommand.InvokeAsync(
 			args,
 			(options, _) =>
 			{

@@ -38,8 +38,9 @@ internal sealed partial class Launcher(IProcessRunner runner, ISecretStore secre
 				await BindSecretAsync(name, service, item, cancellationToken);
 			}
 
+			var kit = await settings.ResolveKit(cancellationToken);
 			await RunInteractiveOrExitAsync(
-				Sbx("create", "--clone", "--pull", settings.Pull, "--name", name, settings.ResolveKit(), repo),
+				Sbx("create", "--clone", "--pull", settings.Pull, "--name", name, kit, repo),
 				cancellationToken);
 		}
 

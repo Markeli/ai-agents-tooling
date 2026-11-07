@@ -50,7 +50,7 @@ internal sealed class LauncherFixture
 
 	public StringWriter Output { get; } = new();
 
-	public LauncherSettings Settings { get; set; } = new(Socket, "/home/owner/.ssh/markeli_agent", "missing", () => Kit);
+	public LauncherSettings Settings { get; set; } = new(Socket, "/home/owner/.ssh/markeli_agent", "missing", _ => Task.FromResult(Kit));
 
 	public Task<int> RunAsync(LauncherOptions options) =>
 		new Launcher(Runner, Secrets, SshAgent, Output).RunAsync(options, Settings, CancellationToken.None);

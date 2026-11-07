@@ -3,7 +3,7 @@ using AgentSandbox;
 using AgentSandbox.Platform;
 using AgentSandbox.Processes;
 
-return await Cli.InvokeAsync(args, RunAsync, Console.Out, Console.Error, CancellationToken.None);
+return await LauncherCommand.InvokeAsync(args, RunAsync, Console.Out, Console.Error, CancellationToken.None);
 
 static async Task<int> RunAsync(LauncherOptions options, CancellationToken cancellationToken)
 {
@@ -20,8 +20,9 @@ static async Task<int> RunAsync(LauncherOptions options, CancellationToken cance
 		SshSocket: GetEnvironmentVariable("AGENT_SSH_SOCK") ?? Path.Combine(home, ".ssh", "markeli-agent.sock"),
 		SshKey: GetEnvironmentVariable("AGENT_SSH_KEY") ?? Path.Combine(home, ".ssh", "markeli_agent"),
 		Pull: GetEnvironmentVariable("AGENT_SANDBOX_PULL") ?? "missing",
-		ResolveKit: () => GetEnvironmentVariable("AGENT_SANDBOX_KIT")
-			?? EmbeddedKit.Extract(EmbeddedKit.DefaultDataDirectory(GetEnvironmentVariable, home), version));
+		ResolveKit: async ct => GetEnvironmentVariable("AGENT_SANDBOX_KIT")
+			?? await EmbeddedKits.ExtractAsync(
+				EmbeddedKits.Default, EmbeddedKits.DefaultDataDirectory(GetEnvironmentVariable, home), version, ct));
 
 	var runner = new ProcessRunner();
 	var launcher = new Launcher(runner, new MacKeychainSecretStore(runner), new MacBotSshAgent(runner), Console.Out);

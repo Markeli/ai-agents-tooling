@@ -38,7 +38,7 @@ public sealed class LauncherTests
 		var fixture = new LauncherFixture { Exists = true };
 		fixture.Runner.On("sbx run --name app -- -c --model opus", 0);
 		var kitResolved = false;
-		fixture.Settings = fixture.Settings with { ResolveKit = () => { kitResolved = true; return LauncherFixture.Kit; } };
+		fixture.Settings = fixture.Settings with { ResolveKit = _ => { kitResolved = true; return Task.FromResult(LauncherFixture.Kit); } };
 
 		var exitCode = await fixture.RunAsync(Defaults with { AgentArguments = ["-c", "--model", "opus"] });
 
@@ -73,7 +73,7 @@ public sealed class LauncherTests
 	public async Task Uses_the_pull_policy_and_kit_from_the_settings()
 	{
 		var fixture = new LauncherFixture();
-		fixture.Settings = fixture.Settings with { Pull = "always", ResolveKit = () => "/tmp/my-kit" };
+		fixture.Settings = fixture.Settings with { Pull = "always", ResolveKit = _ => Task.FromResult("/tmp/my-kit") };
 		fixture.Runner.On("sbx create --clone --pull always --name app /tmp/my-kit /work/app", _ =>
 		{
 			fixture.Exists = true;

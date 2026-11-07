@@ -18,8 +18,8 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<!-- The kit ships inside the tool, which can't find sandbox/kits from where it is installed (docs/adr/0003) -->
-		<EmbeddedResource Include="../../../kits/markeli-claude/**" LogicalName="kit/markeli-claude/%(RecursiveDir)%(Filename)%(Extension)" />
+		<!-- Every kit ships inside the tool, which can't find sandbox/kits from where it is installed (docs/adr/0003) -->
+		<EmbeddedResource Include="../../../kits/**" LogicalName="kits/%(RecursiveDir)%(Filename)%(Extension)" />
 	</ItemGroup>
 
 	<ItemGroup>

@@ -14,7 +14,7 @@ internal sealed record LauncherOptions
 
 	public bool Yes { get; init; }
 
-	/// <summary>Arguments after <c>--</c>, passed to Claude Code through <c>sbx run</c>.</summary>
+	/// <summary>Arguments after <c>--</c>, passed to the agent through <c>sbx run</c>.</summary>
 	public IReadOnlyList<string> AgentArguments { get; init; } = [];
 }
 
@@ -22,5 +22,9 @@ internal sealed record LauncherOptions
 /// <param name="SshSocket">The bot's ssh-agent socket (<c>AGENT_SSH_SOCK</c>).</param>
 /// <param name="SshKey">The bot's private key (<c>AGENT_SSH_KEY</c>).</param>
 /// <param name="Pull">The <c>sbx create --pull</c> policy (<c>AGENT_SANDBOX_PULL</c>).</param>
-/// <param name="ResolveKit">Returns the kit directory (<c>AGENT_SANDBOX_KIT</c>, or the embedded kit), only when needed.</param>
-internal sealed record LauncherSettings(string SshSocket, string SshKey, string Pull, Func<string> ResolveKit);
+/// <param name="ResolveKit">Returns the kit directory (<c>AGENT_SANDBOX_KIT</c>, or an embedded kit), only when needed.</param>
+internal sealed record LauncherSettings(
+	string SshSocket,
+	string SshKey,
+	string Pull,
+	Func<CancellationToken, Task<string>> ResolveKit);

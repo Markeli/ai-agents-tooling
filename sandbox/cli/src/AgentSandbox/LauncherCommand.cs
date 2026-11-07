@@ -3,11 +3,13 @@ using System.CommandLine;
 namespace AgentSandbox;
 
 /// <summary>
-/// The root command: <c>agent-sandbox [--no-attach] [--recreate] [--yes] [--name NAME] [REPO_PATH]</c>, plus
-/// <c>agent-sandbox help</c>; turns a parse result into <see cref="LauncherOptions"/>.
+/// The command line: <c>agent-sandbox [--no-attach] [--recreate] [--yes] [--name NAME] [REPO_PATH] [-- AGENT_ARGS]</c>,
+/// plus <c>agent-sandbox help</c>; turns it into <see cref="LauncherOptions"/> and runs the launcher.
 /// </summary>
 internal sealed class LauncherCommand
 {
+	private const string Separator = "--";
+
 	private readonly Option<bool> _noAttach = new("--no-attach")
 	{
 		Description = "Create the sandbox if needed, but don't attach to it",
@@ -32,25 +34,60 @@ internal sealed class LauncherCommand
 		DefaultValueFactory = _ => ".",
 	};
 
-	/// <param name="run">Runs the launcher with the parsed options.</param>
-	/// <param name="agentArguments">The arguments after <c>--</c>, split off before parsing.</param>
-	/// <param name="output">Where <c>help</c> writes.</param>
-	public LauncherCommand(
+	private readonly RootCommand _root;
+
+	private LauncherCommand(
 		Func<LauncherOptions, CancellationToken, Task<int>> run,
 		IReadOnlyList<string> agentArguments,
 		TextWriter output)
 	{
 		RejectOptionsAsValues();
-		Root = new RootCommand(
-			"Creates (once) and attaches to a clone-mode sandbox for a repository, running Claude Code as markeli-agent. "
-			+ "Arguments after -- go to Claude Code.")
+		_root = new RootCommand(
+			"Creates (once) and attaches to a clone-mode sandbox for a repository, running the agent as markeli-agent. "
+			+ "Arguments after -- go to the agent.")
 		{
 			_noAttach, _recreate, _yes, _name, _repo, CreateHelpCommand(output),
 		};
-		Root.SetAction((result, cancellationToken) => run(ToOptions(result, agentArguments), cancellationToken));
+		_root.SetAction((result, cancellationToken) => run(ToOptions(result, agentArguments), cancellationToken));
 	}
 
-	public RootCommand Root { get; }
+	/// <summary>Parses <paramref name="args"/>, runs <paramref name="run"/> and returns the exit code.</summary>
+	/// <remarks>
+	/// Everything after the first <c>--</c> goes to the agent untouched. It is split off before parsing because
+	/// System.CommandLine would bind the first token after <c>--</c> to <c>REPO_PATH</c>. A
+	/// <see cref="LauncherException"/> becomes <c>agent-sandbox: &lt;message&gt;</c> on <paramref name="error"/>.
+	/// </remarks>
+	public static async Task<int> InvokeAsync(
+		string[] args,
+		Func<LauncherOptions, CancellationToken, Task<int>> run,
+		TextWriter output,
+		TextWriter error,
+		CancellationToken cancellationToken)
+	{
+		var separator = Array.IndexOf(args, Separator);
+		var own = separator < 0 ? args : args[..separator];
+		var agentArguments = separator < 0 ? [] : args[(separator + 1)..];
+
+		var command = new LauncherCommand(run, agentArguments, output);
+
+		// A repository path starting with @ is a path, not a response file
+		var parsed = command._root.Parse(own, new ParserConfiguration { ResponseFileTokenReplacer = null });
+		try
+		{
+			return await parsed.InvokeAsync(
+				new InvocationConfiguration { Output = output, Error = error, EnableDefaultExceptionHandler = false },
+				cancellationToken);
+		}
+		catch (LauncherException e)
+		{
+			if (e.HasMessage)
+			{
+				await error.WriteLineAsync($"agent-sandbox: {e.Message}");
+			}
+
+			return e.ExitCode;
+		}
+	}
 
 	private LauncherOptions ToOptions(ParseResult result, IReadOnlyList<string> agentArguments)
 	{
@@ -95,7 +132,7 @@ internal sealed class LauncherCommand
 	private Command CreateHelpCommand(TextWriter output)
 	{
 		var help = new Command("help", "Show help and usage information");
-		help.SetAction(_ => Root.Parse(["--help"]).Invoke(new InvocationConfiguration { Output = output }));
+		help.SetAction(_ => _root.Parse(["--help"]).Invoke(new InvocationConfiguration { Output = output }));
 		return help;
 	}
 }

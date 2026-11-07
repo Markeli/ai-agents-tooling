@@ -17,7 +17,7 @@ sandbox/
 │   ├── rules/              topic rules the entry point tells the bot to read on demand
 │   └── templates/          spec and ADR templates (/etc/claude-code/templates)
 ├── kits/markeli-claude/    v2 kit: extends built-in claude; network rules, Plannotator port, gitlab credential
-└── cli/                    agent-sandbox launcher: a .NET global tool (Cake build) with the kit embedded
+└── cli/                    agent-sandbox launcher: a .NET global tool (Cake build) with the kits embedded
 ```
 
 ## Toolchain in the image
@@ -208,8 +208,8 @@ useful for pre-provisioning a sandbox or driving it from another script.
 Environment overrides: `AGENT_SSH_SOCK` and `AGENT_SSH_KEY` (the bot's agent socket and key, defaults
 `~/.ssh/markeli-agent.sock` and `~/.ssh/markeli_agent`), `AGENT_SANDBOX_PULL` (`sbx create --pull`, default `missing`)
 and `AGENT_SANDBOX_KIT` (a kit directory instead of the embedded one, e.g. `sandbox/kits/markeli-claude` to try a kit
-change without reinstalling). The embedded kit is written to `~/.local/share/agent-sandbox/kits/<tool version>/` when
-a sandbox is created.
+change without reinstalling). Every kit under `sandbox/kits/` is embedded; the launcher uses `markeli-claude` (choosing
+another is #31) and writes it to `~/.local/share/agent-sandbox/kits/<tool version>/` when a sandbox is created.
 
 ### Several sandboxes for one repository
 
