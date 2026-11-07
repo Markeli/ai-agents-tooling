@@ -12,40 +12,40 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 # .NET SDK channels are a deliberate, manual choice; dotnet-install.sh takes the latest patch of each.
 ARG DOTNET_CHANNELS="9.0 10.0"
 # renovate: datasource=gitlab-releases depName=gitlab-org/cli
-ARG GLAB_VERSION=1.124.0
+ARG GLAB_VERSION=1.128.0
 # renovate: datasource=node-version depName=node versioning=node
 ARG NODE_MAJOR=24
 # renovate: datasource=github-releases depName=mikefarah/yq
-ARG YQ_VERSION=4.54.1
+ARG YQ_VERSION=4.54.2
 # renovate: datasource=github-releases depName=rhysd/actionlint
 ARG ACTIONLINT_VERSION=1.7.12
 # renovate: datasource=github-releases depName=hadolint/hadolint
 ARG HADOLINT_VERSION=2.15.1
 # renovate: datasource=github-releases depName=hashicorp/terraform
-ARG TERRAFORM_VERSION=1.17.0
+ARG TERRAFORM_VERSION=1.17.1
 # renovate: datasource=github-releases depName=backnotprop/plannotator
-ARG PLANNOTATOR_VERSION=0.28.29
+ARG PLANNOTATOR_VERSION=0.28.51
 # renovate: datasource=nuget depName=csharp-ls
 ARG CSHARP_LS_VERSION=0.28.0
 # renovate: datasource=npm depName=typescript-language-server
-ARG TS_LS_VERSION=6.0.2
+ARG TS_LS_VERSION=6.0.3
 # TypeScript 7 is the native compiler and ships no tsserver, which typescript-language-server needs
 # renovate: datasource=npm depName=typescript
 ARG TYPESCRIPT_VERSION=6.0.3
 # renovate: datasource=npm depName=pnpm
-ARG PNPM_VERSION=12.15.0
+ARG PNPM_VERSION=12.18.0
 # renovate: datasource=npm depName=yarn packageName=@yarnpkg/cli-dist
 ARG YARN_VERSION=4.18.1
 # renovate: datasource=pypi depName=ansible-core
-ARG ANSIBLE_CORE_VERSION=2.21.5
+ARG ANSIBLE_CORE_VERSION=2.22.0
 # renovate: datasource=pypi depName=ansible-lint
-ARG ANSIBLE_LINT_VERSION=26.10.1
+ARG ANSIBLE_LINT_VERSION=26.11.0
 # renovate: datasource=pypi depName=claude-agent-sdk
-ARG CLAUDE_AGENT_SDK_VERSION=0.2.174
+ARG CLAUDE_AGENT_SDK_VERSION=0.2.179
 # renovate: datasource=git-refs depName=https://github.com/mattpocock/skills branch=main
-ARG MATTPOCOCK_SKILLS_COMMIT=5beb35b040e3de97e54fa9e386d7e42d15c295c2
+ARG MATTPOCOCK_SKILLS_COMMIT=4ae2317ddb22b046e26455e4f9c9b3aaaf62212d
 # renovate: datasource=git-refs depName=https://github.com/anthropics/claude-plugins-official branch=main
-ARG CLAUDE_PLUGINS_OFFICIAL_COMMIT=58267944f92187b7d6a1c822165c96c81c864806
+ARG CLAUDE_PLUGINS_OFFICIAL_COMMIT=0412be76f50ab4f4f8abff3753efa9269fbbca5b
 ARG BOT_NAME=markeli-agent
 ARG BOT_EMAIL=markelow.dev+agent@gmail.com
 
