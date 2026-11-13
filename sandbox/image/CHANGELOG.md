@@ -4,6 +4,15 @@ All notable changes to the `ghcr.io/markeli/claude-sandbox` image. The format fo
 [Keep a Changelog](https://keepachangelog.com), and versions follow the image SemVer rules in
 [`sandbox/README.md`](../README.md#image-versioning): the first `## [x.y.z]` section is the image version.
 
+## [1.0.2] - 2026-11-13
+
+### Changed
+
+- Pinned tools updated: `glab` 1.130.0, `yq` 4.54.3, `terraform` 1.17.2, Plannotator 0.28.64 (binary, plugin and
+  `/plannotator-*` skills), `typescript-language-server` 6.1.0, `pnpm` 12.18.0, `ansible-core` 2.22.0,
+  `ansible-lint` 26.11.0, `claude-agent-sdk` 0.2.181, the mattpocock skills to commit `5863806` and the
+  `claude-plugins-official` marketplace to commit `099387b`.
+
 ## [1.0.1] - 2026-11-01
 
 ### Changed

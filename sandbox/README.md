@@ -266,7 +266,7 @@ is in [the spec](../docs/specs/2026-10-23-sandbox-image-versioning.md) and ADRs
 | --- | --- |
 | `x.y.z` | A release; immutable, CI never writes an existing one |
 | `x.y`, `x` | The highest release of that minor or major line |
-| `latest` | The highest release from `main` (maintenance releases never move it); the kit's default |
+| `latest` | The highest release from `main` (maintenance releases never move it); the launcher's default |
 | `tree-<hash>` | One build per git tree of `sandbox/image`, never rebuilt; internal, deleted after 30 days unless released |
 | `sha-<short>` | Legacy: no longer published; existing tags stay |
 
