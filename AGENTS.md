@@ -30,6 +30,9 @@ Personal monorepo for AI agent tooling: skills, MCP servers, Claude plugins, sys
 - `agent-sandbox` launcher (`sandbox/cli`): run `dotnet tool restore && dotnet cake` there (Default: build and test;
   `--target=Format` checks formatting). `global.json` selects Microsoft.Testing.Platform (xunit.v3), so a plain
   `dotnet test` needs `--solution AgentSandbox.slnx`.
+- sbx kits (`sandbox/kits/`): sbx reads a kit directory's descriptor only as `spec.yaml`, v3 descriptors included,
+  not as `<name>.yaml` like the examples of the v3 spec. `sbx` isn't available in the agent sandbox: `make validate`
+  and any sandbox creation run on the owner's host.
 - In the sandbox, shellcheck dies with `commitBuffer: invalid argument` on files with emoji unless the locale is
   UTF-8: run `LC_ALL=C.UTF-8 shellcheck -x ...`.
 - `renovate --platform=local --dry-run=extract` (via `npx --package renovate@<version> --`) only sees git-tracked

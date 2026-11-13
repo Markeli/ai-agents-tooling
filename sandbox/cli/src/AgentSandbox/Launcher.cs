@@ -7,6 +7,9 @@ namespace AgentSandbox;
 /// <summary>Creates (once) and attaches to a clone-mode sandbox for a repository, running Claude Code as markeli-agent.</summary>
 internal sealed partial class Launcher(IProcessRunner runner, ISecretStore secrets, IBotSshAgent sshAgent, TextWriter output)
 {
+	// The built-in agent name sbx resolves to its published v3 kit; the embedded kit is a mixin for it
+	private const string Agent = "claude";
+
 	private static readonly (string Service, string KeychainItem)[] Secrets =
 	[
 		("github", "agent/personal-github"),
@@ -42,7 +45,9 @@ internal sealed partial class Launcher(IProcessRunner runner, ISecretStore secre
 			}
 
 			await RunInteractiveOrExitAsync(
-				Sbx("create", "--clone", "--pull", options.ForcePull ? "always" : "missing", "--name", name, kit, repo),
+				Sbx(
+					"create", "--clone", "--pull", options.ForcePull ? "always" : "missing", "--name", name,
+					"--template", settings.Image, Agent, "--kit", kit, repo),
 				cancellationToken);
 		}
 
@@ -160,16 +165,13 @@ internal sealed partial class Launcher(IProcessRunner runner, ISecretStore secre
 
 	private async Task PrintImageAsync(string name, CancellationToken cancellationToken)
 	{
-		var inspect = await runner.RunAsync(Sbx("inspect", name, "--json"), cancellationToken);
-		var image = inspect.Succeeded ? SandboxImage.DescribeReference(inspect.StdOut) : SandboxImage.Unknown;
-
 		// Images from before 1.0.0 have no image-release file
 		var release = await runner.RunAsync(
 			Sbx("exec", name, "sh", "-c", "cat /etc/claude-code/image-release 2>/dev/null || echo VERSION=unversioned"),
 			cancellationToken);
-		var version = release.Succeeded ? SandboxImage.ParseVersion(release.StdOut) : SandboxImage.Unknown;
+		var description = SandboxImage.DescribeRelease(release.Succeeded ? release.StdOut : string.Empty);
 
-		await output.WriteLineAsync($"agent-sandbox: {name} runs {image}, version {version}");
+		await output.WriteLineAsync($"agent-sandbox: {name} runs image {description}");
 	}
 
 	private async Task RunInteractiveOrExitAsync(ProcessSpec spec, CancellationToken cancellationToken)

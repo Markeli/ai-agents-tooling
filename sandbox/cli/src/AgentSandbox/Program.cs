@@ -16,6 +16,7 @@ static async Task<int> RunAsync(LauncherOptions options, CancellationToken cance
 	var settings = new LauncherSettings(
 		SshSocket: GetEnvironmentVariable("AGENT_SSH_SOCK") ?? Path.Combine(home, ".ssh", "markeli-agent.sock"),
 		SshKey: GetEnvironmentVariable("AGENT_SSH_KEY") ?? Path.Combine(home, ".ssh", "markeli_agent"),
+		Image: GetEnvironmentVariable("AGENT_SANDBOX_IMAGE") ?? SandboxImage.Default,
 		ResolveKit: async ct => GetEnvironmentVariable("AGENT_SANDBOX_KIT")
 			?? await EmbeddedKits.ExtractAsync(
 				EmbeddedKits.Default, EmbeddedKits.DefaultDataDirectory(GetEnvironmentVariable, home), EmbeddedKits.ToolVersion, ct));
