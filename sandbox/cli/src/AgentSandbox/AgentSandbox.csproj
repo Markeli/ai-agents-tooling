@@ -8,10 +8,10 @@
 		<PackAsTool>true</PackAsTool>
 		<ToolCommandName>agent-sandbox</ToolCommandName>
 		<PackageId>AgentSandbox</PackageId>
-		<Version>1.0.0</Version>
-		<Description>Creates (once) and attaches to a Docker Sandbox running Claude Code as markeli-agent.</Description>
+		<Version>0.1.0</Version>
+		<Description>Launcher for Docker Sandboxes (sbx): creates a clone-mode sandbox for a git repository once — bot SSH agent, keychain-backed secrets and an embedded sbx kit — then attaches to the coding agent running in it as the markeli-agent bot.</Description>
 		<RollForward>Major</RollForward>
-		<!-- The informational version names the directory the kits are written to: 1.0.0, not 1.0.0+<commit> -->
+		<!-- The informational version names the directory the kits are written to: 0.1.0, not 0.1.0+<commit> -->
 		<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
 	</PropertyGroup>
 

@@ -41,7 +41,7 @@ Task("Pack")
 		OutputDirectory = artifacts,
 	}));
 
-// Uninstalls first: dotnet tool update keeps an installed package of the same version, so a rebuilt 1.0.0 with a
+// Uninstalls first: dotnet tool update keeps an installed package of the same version, so a rebuilt 0.1.0 with a
 // changed kit would never reach the host. Before that the package is installed into a scratch directory, so one that
 // can't be installed doesn't cost the host its working agent-sandbox. The version is pinned so that no other source
 // can supply the package.

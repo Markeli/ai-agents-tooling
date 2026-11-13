@@ -17,7 +17,7 @@ public sealed class LauncherCommandTests
 	[Fact]
 	public async Task Parses_every_flag_and_passes_everything_after_the_separator_through()
 	{
-		(await InvokeAsync("--no-attach", "--recreate", "--yes", "--name", "blog-1", "~/repo", "--", "-c", "--", "--name", "x"))
+		(await InvokeAsync("--no-attach", "--recreate", "--yes", "--force-pull", "--name", "blog-1", "~/repo", "--", "-c", "--", "--name", "x"))
 			.Should().Be(0);
 
 		_options.Should().BeEquivalentTo(new LauncherOptions
@@ -27,6 +27,7 @@ public sealed class LauncherCommandTests
 			NoAttach = true,
 			Recreate = true,
 			Yes = true,
+			ForcePull = true,
 			AgentArguments = ["-c", "--", "--name", "x"],
 		});
 	}

@@ -42,7 +42,7 @@ internal sealed partial class Launcher(IProcessRunner runner, ISecretStore secre
 			}
 
 			await RunInteractiveOrExitAsync(
-				Sbx("create", "--clone", "--pull", settings.Pull, "--name", name, kit, repo),
+				Sbx("create", "--clone", "--pull", options.ForcePull ? "always" : "missing", "--name", name, kit, repo),
 				cancellationToken);
 		}
 

@@ -3,7 +3,7 @@ using System.CommandLine;
 namespace AgentSandbox;
 
 /// <summary>
-/// The command line: <c>agent-sandbox [--no-attach] [--recreate] [--yes] [--name NAME] [REPO_PATH] [-- AGENT_ARGS]</c>,
+/// The command line: <c>agent-sandbox [--no-attach] [--recreate] [--yes] [--force-pull] [--name NAME] [REPO_PATH] [-- AGENT_ARGS]</c>,
 /// plus <c>agent-sandbox help</c>; turns it into <see cref="LauncherOptions"/> and runs the launcher.
 /// </summary>
 internal sealed class LauncherCommand
@@ -26,6 +26,12 @@ internal sealed class LauncherCommand
 	private readonly Option<bool> _yes = new("--yes")
 	{
 		Description = "With --recreate, skip the confirmation of sbx rm",
+		Arity = ArgumentArity.Zero,
+	};
+
+	private readonly Option<bool> _forcePull = new("--force-pull")
+	{
+		Description = "When the sandbox is created (first run or --recreate), pull its image even if there is a local copy",
 		Arity = ArgumentArity.Zero,
 	};
 
@@ -53,7 +59,7 @@ internal sealed class LauncherCommand
 			"Creates (once) and attaches to a clone-mode sandbox for a repository, running the agent as markeli-agent. "
 			+ "Arguments after -- go to the agent.")
 		{
-			_noAttach, _recreate, _yes, _name, _repo, CreateHelpCommand(output),
+			_noAttach, _recreate, _yes, _forcePull, _name, _repo, CreateHelpCommand(output),
 		};
 		_root.SetAction((result, cancellationToken) => run(ToOptions(result, agentArguments), cancellationToken));
 	}
@@ -126,6 +132,7 @@ internal sealed class LauncherCommand
 			NoAttach = result.GetValue(_noAttach),
 			Recreate = result.GetValue(_recreate),
 			Yes = result.GetValue(_yes),
+			ForcePull = result.GetValue(_forcePull),
 			AgentArguments = agentArguments,
 		};
 	}

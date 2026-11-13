@@ -70,17 +70,17 @@ public sealed class LauncherTests
 	}
 
 	[Fact]
-	public async Task Uses_the_pull_policy_and_kit_from_the_settings()
+	public async Task Force_pull_creates_from_a_freshly_pulled_image_and_the_kit_comes_from_the_settings()
 	{
 		var fixture = new LauncherFixture();
-		fixture.Settings = fixture.Settings with { Pull = "always", ResolveKit = _ => Task.FromResult("/tmp/my-kit") };
+		fixture.Settings = fixture.Settings with { ResolveKit = _ => Task.FromResult("/tmp/my-kit") };
 		fixture.Runner.On("sbx create --clone --pull always --name app /tmp/my-kit /work/app", _ =>
 		{
 			fixture.Exists = true;
 			return new ProcessResult(0);
 		});
 
-		(await fixture.RunAsync(Defaults)).Should().Be(0);
+		(await fixture.RunAsync(Defaults with { ForcePull = true })).Should().Be(0);
 
 		fixture.Runner.CommandLines.Should().Contain("sbx create --clone --pull always --name app /tmp/my-kit /work/app");
 	}
