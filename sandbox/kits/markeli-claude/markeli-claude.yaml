@@ -1,0 +1,49 @@
+# syntax=docker/sandbox-kit:3
+# A declaration-only v3 mixin for the published claude kit: sbx 0.51+ resolves built-in agent names to v3 kits, which
+# a v2 kit can neither extend nor join. The toolchain image is not part of a v3 mixin; the launcher passes it to
+# sbx create.
+schemaVersion: "3"
+kind: mixin
+displayName: Claude Code as markeli-agent
+description: Bot SSH pushes, toolchain registries, the Plannotator port and GitLab API credentials for markeli-agent
+sourceUrl: https://github.com/Markeli/ai-agents-tooling
+
+capabilities:
+  - type: com.docker.sandbox/network-policy@1
+    config:
+      runtime:
+        allow:
+          - github.com:22
+          - gitlab.com:22
+          # The gitlab credential below injects on gitlab.com, which must be among the allowed hosts
+          - gitlab.com:443
+          - api.nuget.org
+          # dotnet-install.sh (Dockerfile .NET SDK install step) resolves the latest SDK version per channel
+          # from ci.dot.net, then downloads the actual SDK binaries from builds.dotnet.microsoft.com
+          - ci.dot.net
+          - builds.dotnet.microsoft.com
+          # terraform init / ansible-galaxy pull providers, roles and collections from these registries;
+          # the balanced sbx policy gates both behind an approval (ghcr.io and registry.gitlab.com are already allowed)
+          - registry.terraform.io
+          - galaxy.ansible.com
+          # microsoft-docs plugin: Microsoft Learn MCP server (https://learn.microsoft.com/api/mcp)
+          - learn.microsoft.com
+
+  # Plannotator's browser UI (PLANNOTATOR_PORT in the image); sbx picks a free host port, see `sbx ports <name>`
+  - type: com.docker.sandbox/port@1
+    config:
+      name: plannotator
+      container: 19432
+
+  # Optional, as v2 credentials were: an entry is required in v3 unless it opts out
+  - type: com.docker.sandbox/credential@1
+    optional: true
+    description: GitLab.com API token of markeli-agent for glab
+    config:
+      service: gitlab
+      phase: runtime
+      apiKey:
+        name: GITLAB_TOKEN
+        proxyManaged: true
+        inject:
+          - {domain: gitlab.com, header: PRIVATE-TOKEN, format: "%s"}
