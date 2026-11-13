@@ -102,8 +102,8 @@ Details:
   meant for other users, and GitHub Packages needs a token even to read. Revisit this when a second machine needs
   the tool (#28).
 - **Behaviour parity first.** The port PR keeps the flags (`--no-attach`, `--recreate`, `--yes`, `--name`, `-- ARGS`),
-  the environment overrides (`AGENT_SANDBOX_KIT`, `AGENT_SSH_SOCK`, `AGENT_SSH_KEY`, `AGENT_SANDBOX_PULL`), the
-  messages and the exit codes. It replaces `sandbox/bin/agent-sandbox` and updates `sandbox/README.md`.
+  the environment overrides (`AGENT_SANDBOX_KIT`, `AGENT_SSH_SOCK`, `AGENT_SSH_KEY`), the messages and the exit
+  codes; the review of the port turned `AGENT_SANDBOX_PULL` into the `--force-pull` flag. It replaces `sandbox/bin/agent-sandbox` and updates `sandbox/README.md`.
   #10, #9 and #13 follow in C#. The #10 implementation PR updates the bash-specific details in its spec, such as line
   references and `jq`.
 - **CI.** A workflow runs on changes under `sandbox/cli/**` (and on its own changes). It runs the Cake `Default`

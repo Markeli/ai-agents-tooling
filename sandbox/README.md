@@ -17,7 +17,7 @@ sandbox/
 │   ├── rules/              topic rules the entry point tells the bot to read on demand
 │   └── templates/          spec and ADR templates (/etc/claude-code/templates)
 ├── kits/markeli-claude/    v2 kit: extends built-in claude; network rules, Plannotator port, gitlab credential
-└── bin/agent-sandbox       create-once-and-attach launcher for one repository
+└── cli/                    agent-sandbox launcher: a .NET global tool (Cake build) with the kits embedded
 ```
 
 ## Toolchain in the image
@@ -179,13 +179,23 @@ Claude Code is logged in with. It stays off when `CLAUDE_CODE_DISABLE_NONESSENTI
    network entries are host/port patterns only, without methods or paths. GET still lets data out through the URL,
    so this guards against writes, not exfiltration.
 
+5. The launcher `agent-sandbox`, a .NET global tool (needs the .NET 10 SDK or newer), built from this checkout:
+
+   ```bash
+   cd sandbox/cli && dotnet tool restore && dotnet cake --target=Install
+   ```
+
+   It lands in `~/.dotnet/tools`; add that to `PATH` if the .NET installer hasn't. Run the same command after pulling
+   changes to `sandbox/cli` or `sandbox/kits`: the kit is embedded in the tool, so a `git pull` alone updates neither.
+
 ## Use
 
 ```bash
-sandbox/bin/agent-sandbox ~/Development/Personal/<repo>      # create once, then attach
-sandbox/bin/agent-sandbox . -- -c                            # pass extra Claude Code args
-sandbox/bin/agent-sandbox --no-attach ~/Development/Personal/<repo>   # create/ensure, don't attach
-sandbox/bin/agent-sandbox --recreate ~/Development/Personal/<repo>    # see "Update or recreate a sandbox"
+agent-sandbox ~/Development/Personal/<repo>      # create once, then attach
+agent-sandbox . -- -c                            # pass extra Claude Code args
+agent-sandbox --no-attach ~/Development/Personal/<repo>   # create/ensure, don't attach
+agent-sandbox --recreate ~/Development/Personal/<repo>    # see "Update or recreate a sandbox"
+agent-sandbox help                                       # all options (same as --help)
 ```
 
 The first run asks to approve the kit's credentials (`anthropic`, `github`, `gitlab`); approvals are stored in
@@ -195,14 +205,22 @@ pushes branches to `origin` over SSH. Remove it with `sbx rm <name>`.
 `--no-attach` creates the sandbox and binds its secrets (or confirms both already exist) without opening a shell —
 useful for pre-provisioning a sandbox or driving it from another script.
 
+Environment overrides: `AGENT_SSH_SOCK` and `AGENT_SSH_KEY` (the bot's agent socket and key, defaults
+`~/.ssh/markeli-agent.sock` and `~/.ssh/markeli_agent`) and `AGENT_SANDBOX_KIT` (a kit directory instead of the
+embedded one, e.g. `sandbox/kits/markeli-claude` to try a kit change without reinstalling). `sbx create` reuses a
+local copy of the image; `--force-pull` makes it pull the image again. Every kit under `sandbox/kits/` is embedded; the
+launcher uses `markeli-claude` (choosing another is #31) and writes it to
+`~/.local/share/agent-sandbox/kits/<tool version>/` when a sandbox is created.
+That directory always mirrors the embedded kit; the kits of other tool versions are deleted.
+
 ### Several sandboxes for one repository
 
 Pass `--name NAME` to run more than one sandbox against the same repository in parallel — e.g. to work on two
 branches of `markeli.github.io` at once:
 
 ```bash
-sandbox/bin/agent-sandbox --name blog-1 ~/Development/Personal/markeli.github.io
-sandbox/bin/agent-sandbox --name blog-2 ~/Development/Personal/markeli.github.io
+agent-sandbox --name blog-1 ~/Development/Personal/markeli.github.io
+agent-sandbox --name blog-2 ~/Development/Personal/markeli.github.io
 ```
 
 `NAME` must be lowercase letters, digits and hyphens, starting with a letter or digit (so a slip like
@@ -212,6 +230,20 @@ everywhere a sandbox is keyed by name — sandbox-scoped secrets, `sbx create`, 
 remote, `--no-attach`, and attach. Each named sandbox is its own independent clone with its own `sandbox-<name>`
 remote on the host (see "Update or recreate a sandbox"); use a separate branch per sandbox so they don't push over
 each other.
+
+## Launcher development
+
+[ADR 0003](../docs/adr/0003-port-agent-sandbox-to-a-dotnet-tool.md) explains why the launcher is a .NET tool. The code
+is in `cli/src/AgentSandbox` (`Launcher` holds the create/recreate/attach logic; macOS specifics are behind
+`ISecretStore` and `IBotSshAgent`), and `cli/tests` runs it against a fake process runner, so the tests need neither
+`sbx` nor macOS. `cli/build.cake` is the build script for local runs and CI (`.github/workflows/agent-sandbox-cli.yml`):
+
+```bash
+cd sandbox/cli && dotnet tool restore
+dotnet cake                    # Default: clean, build, test
+dotnet cake --target=Format    # dotnet format --verify-no-changes
+dotnet cake --target=Install   # pack and (re)install the global tool
+```
 
 ## Image versioning
 
@@ -324,15 +356,16 @@ When a new major is out and the previous one needs a fix:
 ## Update or recreate a sandbox
 
 A sandbox never picks up a new image build or a kit change (network allow list, credentials, the `image:` tag)
-after it's created — both are fixed at `sbx create` time. To pick up either, remove and recreate it:
+after it's created — both are fixed at `sbx create` time. To pick up either, remove and recreate it; for a kit
+change, reinstall the launcher first (`dotnet cake --target=Install` in `sandbox/cli`), since the kit is embedded:
 
 ```bash
 make load                                                   # optional: build+load the image locally first
-sandbox/bin/agent-sandbox --recreate ~/Development/Personal/<repo>
+agent-sandbox --recreate ~/Development/Personal/<repo>
 # or, equivalently and by hand:
 sbx rm <name>
-sandbox/bin/agent-sandbox ~/Development/Personal/<repo>                            # reuses a locally loaded image
-AGENT_SANDBOX_PULL=always sandbox/bin/agent-sandbox ~/Development/Personal/<repo>  # forces the current remote `latest`
+agent-sandbox ~/Development/Personal/<repo>                            # reuses a locally loaded image
+agent-sandbox --force-pull ~/Development/Personal/<repo>               # pulls the current remote `latest`
 ```
 
 `agent-sandbox` prints the version it runs (`agent-sandbox: <name> runs <image>@<digest>, version 1.3.0`); compare
@@ -363,6 +396,8 @@ Removing a sandbox (via `--recreate`, `sbx rm`, or just letting it expire) loses
 ## Known limits
 
 - amd64-only images (SQL Server) do not run in the arm64 VM — run those tests on the host or in CI.
+- The launcher runs on macOS hosts only; Windows (and Linux) hosts are
+  [#28](https://github.com/Markeli/ai-agents-tooling/issues/28).
 - `ssh.agentSocketPath` is global: every sandbox gets the personal bot key. Other scopes need their own launcher.
 - claude.ai connectors are disabled (`ENABLE_CLAUDEAI_MCP_SERVERS=false`); they would act as the owner. Add MCP servers
   through the sbx gateway (`sbx mcp add`, `--static-mcp`).

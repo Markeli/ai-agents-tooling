@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+		<!-- Also the program name that help and parse errors show -->
+		<AssemblyName>agent-sandbox</AssemblyName>
+		<RootNamespace>AgentSandbox</RootNamespace>
+		<PackAsTool>true</PackAsTool>
+		<ToolCommandName>agent-sandbox</ToolCommandName>
+		<PackageId>AgentSandbox</PackageId>
+		<Version>0.1.0</Version>
+		<Description>Launcher for Docker Sandboxes (sbx): creates a clone-mode sandbox for a git repository once — bot SSH agent, keychain-backed secrets and an embedded sbx kit — then attaches to the coding agent running in it as the markeli-agent bot.</Description>
+		<RollForward>Major</RollForward>
+		<!-- The informational version names the directory the kits are written to: 0.1.0, not 0.1.0+<commit> -->
+		<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="System.CommandLine" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<!-- Every kit ships inside the tool, which can't find sandbox/kits from where it is installed (docs/adr/0003) -->
+		<!-- Only files inside a kit directory, without Finder's .DS_Store. WithCulture: spec.de.yaml is a kit file, not a
+		     German satellite resource -->
+		<EmbeddedResource
+			Include="../../../kits/*/**"
+			Exclude="../../../kits/**/.DS_Store"
+			LogicalName="kits/%(RecursiveDir)%(Filename)%(Extension)"
+			WithCulture="false" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<InternalsVisibleTo Include="AgentSandbox.Tests" />
+	</ItemGroup>
+
+</Project>
