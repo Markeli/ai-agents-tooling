@@ -51,6 +51,54 @@ public sealed class EmbeddedKitsTests : IDisposable
 	}
 
 	[Fact]
+	public async Task Deletes_files_the_kit_no_longer_has()
+	{
+		var kit = await ExtractAsync(EmbeddedKits.Default);
+		Directory.CreateDirectory(Path.Combine(kit, "removed"));
+		await File.WriteAllTextAsync(Path.Combine(kit, "removed", "network.yaml"), "stale", TestContext.Current.CancellationToken);
+		await File.WriteAllTextAsync(Path.Combine(kit, "renamed.yaml"), "stale", TestContext.Current.CancellationToken);
+
+		await ExtractAsync(EmbeddedKits.Default);
+
+		RelativeFiles(kit).Should().BeEquivalentTo(RelativeFiles(Path.Combine(RepositoryKits(), EmbeddedKits.Default)));
+	}
+
+	[Fact]
+	public async Task Removes_the_kits_of_other_tool_versions()
+	{
+		var kits = Path.Combine(_dataDirectory, "agent-sandbox", "kits");
+		Directory.CreateDirectory(Path.Combine(kits, "1.2.2", EmbeddedKits.Default));
+		await File.WriteAllTextAsync(
+			Path.Combine(kits, "1.2.2", EmbeddedKits.Default, "spec.yaml"), "old", TestContext.Current.CancellationToken);
+
+		await ExtractAsync(EmbeddedKits.Default);
+
+		Directory.EnumerateDirectories(kits).Select(Path.GetFileName).Should().Equal("1.2.3");
+	}
+
+	[Fact]
+	public async Task Launchers_started_side_by_side_write_the_same_kit()
+	{
+		var kits = await Task.WhenAll(Enumerable.Range(0, 16).Select(_ => Task.Run(() => ExtractAsync(EmbeddedKits.Default))));
+
+		var kit = kits.Distinct().Should().ContainSingle().Subject;
+		foreach (var file in RelativeFiles(Path.Combine(RepositoryKits(), EmbeddedKits.Default)))
+		{
+			File.ReadAllBytes(Path.Combine(kit, file))
+				.Should().Equal(File.ReadAllBytes(Path.Combine(RepositoryKits(), EmbeddedKits.Default, file)));
+		}
+
+		Directory.EnumerateFiles(Path.GetDirectoryName(kit)!).Should().BeEmpty("temporary files are renamed into the kit");
+	}
+
+	[Fact]
+	public void Names_the_kit_directory_after_the_package_version()
+	{
+		EmbeddedKits.ToolVersion.Should().MatchRegex(
+			@"^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$", "a +<commit> suffix would give every build its own directory");
+	}
+
+	[Fact]
 	public async Task Rejects_an_unknown_kit_and_lists_the_embedded_ones()
 	{
 		var extract = () => ExtractAsync("no-such-kit");
@@ -75,7 +123,9 @@ public sealed class EmbeddedKitsTests : IDisposable
 		EmbeddedKits.ExtractAsync(kit, _dataDirectory, "1.2.3", TestContext.Current.CancellationToken);
 
 	private static IEnumerable<string> RelativeFiles(string directory) =>
-		Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories).Select(f => Path.GetRelativePath(directory, f));
+		Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories)
+			.Where(f => Path.GetFileName(f) != ".DS_Store")
+			.Select(f => Path.GetRelativePath(directory, f));
 
 	private static string RepositoryKits([CallerFilePath] string thisFile = "") =>
 		Path.GetFullPath(Path.Combine(Path.GetDirectoryName(thisFile)!, "..", "..", "..", "kits"));

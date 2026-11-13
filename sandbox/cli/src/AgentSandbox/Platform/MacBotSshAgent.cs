@@ -15,7 +15,15 @@ internal sealed class MacBotSshAgent(IProcessRunner runner) : IBotSshAgent
 		}
 
 		// A stale socket left by an agent that died would make ssh-agent -a fail
-		File.Delete(socket);
+		try
+		{
+			File.Delete(socket);
+		}
+		catch (DirectoryNotFoundException)
+		{
+			// No directory, no stale socket; ssh-agent reports the missing directory itself
+		}
+
 		var agent = await runner.RunAsync(
 			new ProcessSpec("ssh-agent", ["-a", socket]) { StdErr = OutputMode.Inherit },
 			cancellationToken);

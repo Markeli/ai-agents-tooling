@@ -33,7 +33,7 @@ internal sealed class LauncherFixture
 			.On($"sbx run --name {Name}", 0)
 			.On($"sbx exec {Name} true", 0)
 			.On($"git -C {Repo} fetch sandbox-{Name} --quiet", 0)
-			.On($"git -C {Repo} rev-list --remotes=sandbox-{Name} --not --remotes=origin", 0)
+			.On($"git -C {Repo} rev-list --max-count=1 --remotes=sandbox-{Name} --not --remotes=origin", 0)
 			.On($"sbx rm {Name}", RemoveSandbox)
 			.On($"sbx rm --force {Name}", RemoveSandbox);
 	}

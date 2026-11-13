@@ -1,3 +1,5 @@
+using System.Reflection;
+
 namespace AgentSandbox;
 
 /// <summary>The sbx kits (every directory under sandbox/kits) embedded in the tool and written to disk for <c>sbx create</c>.</summary>
@@ -8,6 +10,11 @@ internal static class EmbeddedKits
 
 	private const string ResourcePrefix = "kits/";
 
+	/// <summary>The tool's package version, which names the directory the kits are written to.</summary>
+	public static string ToolVersion { get; } =
+		typeof(EmbeddedKits).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+		?? "0.0.0";
+
 	/// <summary>The names of the embedded kits, sorted.</summary>
 	public static IReadOnlyList<string> Names { get; } = Resources()
 		.Select(r => r.Path.Split('/')[0])
@@ -17,9 +24,12 @@ internal static class EmbeddedKits
 
 	/// <summary>
 	/// Writes the kit <paramref name="kit"/> under <c>&lt;dataDirectory&gt;/agent-sandbox/kits/&lt;version&gt;/</c> and
-	/// returns its directory. Files that differ are rewritten, so a reinstalled build of the same version never runs with
-	/// an older kit.
+	/// returns its directory. Files that differ are rewritten and files the kit no longer has are deleted, so a
+	/// reinstalled build of the same version never runs with an older kit. The kits of other tool versions are removed.
 	/// </summary>
+	/// <remarks>
+	/// Safe for launchers started side by side: each file is renamed into place, so a reader sees it whole.
+	/// </remarks>
 	/// <exception cref="LauncherException">The tool has no kit named <paramref name="kit"/>.</exception>
 	public static async Task<string> ExtractAsync(
 		string kit,
@@ -34,9 +44,14 @@ internal static class EmbeddedKits
 		}
 
 		var root = Path.Combine(dataDirectory, "agent-sandbox", "kits", version);
+		var directory = Path.Combine(root, kit);
+
+		// Ignoring case: on a case-insensitive file system a kit file renamed only in case keeps its old name on disk
+		var written = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 		foreach (var (resource, relative) in files)
 		{
-			var path = Path.Combine(root, relative);
+			var path = Path.GetFullPath(Path.Combine(root, relative));
+			written.Add(path);
 			var content = await ReadResourceAsync(resource, cancellationToken);
 			if (File.Exists(path) && (await File.ReadAllBytesAsync(path, cancellationToken)).AsSpan().SequenceEqual(content))
 			{
@@ -44,10 +59,16 @@ internal static class EmbeddedKits
 			}
 
 			Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-			await File.WriteAllBytesAsync(path, content, cancellationToken);
+			await ReplaceAsync(path, content, temporaryDirectory: root, cancellationToken);
 		}
 
-		return Path.Combine(root, kit);
+		foreach (var stale in Directory.GetFiles(directory, "*", SearchOption.AllDirectories).Where(f => !written.Contains(f)))
+		{
+			File.Delete(stale);
+		}
+
+		DeleteOtherVersions(root);
+		return directory;
 	}
 
 	/// <summary>Per-user data directory: <c>$XDG_DATA_HOME</c> or <c>~/.local/share</c>; local app data on Windows.</summary>
@@ -60,6 +81,40 @@ internal static class EmbeddedKits
 
 		var xdg = getEnvironmentVariable("XDG_DATA_HOME");
 		return string.IsNullOrEmpty(xdg) ? Path.Combine(home, ".local", "share") : xdg;
+	}
+
+	// Written beside the kit, not inside it, where a launcher running in parallel would delete it as a stale file
+	private static async Task ReplaceAsync(
+		string path,
+		byte[] content,
+		string temporaryDirectory,
+		CancellationToken cancellationToken)
+	{
+		var temporary = Path.Combine(temporaryDirectory, $".{Guid.NewGuid():N}.tmp");
+		try
+		{
+			await File.WriteAllBytesAsync(temporary, content, cancellationToken);
+			File.Move(temporary, path, overwrite: true);
+		}
+		finally
+		{
+			File.Delete(temporary);
+		}
+	}
+
+	// Housekeeping only: a directory that can't be removed now goes on the next run
+	private static void DeleteOtherVersions(string root)
+	{
+		foreach (var other in Directory.GetDirectories(Path.GetDirectoryName(root)!).Where(d => d != root))
+		{
+			try
+			{
+				Directory.Delete(other, recursive: true);
+			}
+			catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+			{
+			}
+		}
 	}
 
 	// Path is relative to sandbox/kits, with '/': MSBuild's %(RecursiveDir) uses the build host's directory separator

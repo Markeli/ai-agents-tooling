@@ -10,17 +10,24 @@ internal sealed class LauncherCommand
 {
 	private const string Separator = "--";
 
+	// Arity zero: a flag never takes the next token as its value, so in "--yes false" the "false" is REPO_PATH
 	private readonly Option<bool> _noAttach = new("--no-attach")
 	{
 		Description = "Create the sandbox if needed, but don't attach to it",
+		Arity = ArgumentArity.Zero,
 	};
 
 	private readonly Option<bool> _recreate = new("--recreate")
 	{
 		Description = "Remove and recreate the sandbox (refused while it has commits not pushed to origin)",
+		Arity = ArgumentArity.Zero,
 	};
 
-	private readonly Option<bool> _yes = new("--yes") { Description = "With --recreate, skip the confirmation of sbx rm" };
+	private readonly Option<bool> _yes = new("--yes")
+	{
+		Description = "With --recreate, skip the confirmation of sbx rm",
+		Arity = ArgumentArity.Zero,
+	};
 
 	private readonly Option<string> _name = new("--name")
 	{
@@ -55,7 +62,8 @@ internal sealed class LauncherCommand
 	/// <remarks>
 	/// Everything after the first <c>--</c> goes to the agent untouched. It is split off before parsing because
 	/// System.CommandLine would bind the first token after <c>--</c> to <c>REPO_PATH</c>. A
-	/// <see cref="LauncherException"/> becomes <c>agent-sandbox: &lt;message&gt;</c> on <paramref name="error"/>.
+	/// <see cref="LauncherException"/> or a file system error becomes <c>agent-sandbox: &lt;message&gt;</c> on
+	/// <paramref name="error"/>.
 	/// </remarks>
 	public static async Task<int> InvokeAsync(
 		string[] args,
@@ -74,8 +82,16 @@ internal sealed class LauncherCommand
 		var parsed = command._root.Parse(own, new ParserConfiguration { ResponseFileTokenReplacer = null });
 		try
 		{
+			// No termination timeout: System.CommandLine would otherwise cancel the action on Ctrl+C and SIGTERM, while
+			// the launcher leaves signals to the programs it runs, as the bash launcher did
 			return await parsed.InvokeAsync(
-				new InvocationConfiguration { Output = output, Error = error, EnableDefaultExceptionHandler = false },
+				new InvocationConfiguration
+				{
+					Output = output,
+					Error = error,
+					EnableDefaultExceptionHandler = false,
+					ProcessTerminationTimeout = null,
+				},
 				cancellationToken);
 		}
 		catch (LauncherException e)
@@ -86,6 +102,12 @@ internal sealed class LauncherCommand
 			}
 
 			return e.ExitCode;
+		}
+		catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+		{
+			// The file system said no (kit directory, ssh socket): a message, not a stack trace
+			await error.WriteLineAsync($"agent-sandbox: {e.Message}");
+			return 1;
 		}
 	}
 

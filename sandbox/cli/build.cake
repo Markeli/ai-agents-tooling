@@ -42,13 +42,20 @@ Task("Pack")
 	}));
 
 // Uninstalls first: dotnet tool update keeps an installed package of the same version, so a rebuilt 1.0.0 with a
-// changed kit would never reach the host
+// changed kit would never reach the host. Before that the package is installed into a scratch directory, so one that
+// can't be installed doesn't cost the host its working agent-sandbox. The version is pinned so that no other source
+// can supply the package.
 Task("Install")
 	.IsDependentOn("Pack")
 	.Does(() =>
 	{
+		var version = XmlPeek(ToolProject, "/Project/PropertyGroup/Version");
+		var trial = artifacts.Combine("install-check");
+		Dotnet("tool", "install", PackageId, "--tool-path", trial.FullPath, "--add-source", artifacts.FullPath, "--version", version);
+		DeleteDirectory(trial, new DeleteDirectorySettings { Recursive = true, Force = true });
+
 		Dotnet(quiet: true, "tool", "uninstall", "--global", PackageId);
-		Dotnet("tool", "install", "--global", PackageId, "--add-source", artifacts.FullPath);
+		Dotnet("tool", "install", "--global", PackageId, "--add-source", artifacts.FullPath, "--version", version);
 	});
 
 RunTarget(target);

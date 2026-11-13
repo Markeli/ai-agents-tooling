@@ -234,7 +234,7 @@ public sealed class LauncherTests
 			"sbx ls",
 			"sbx exec app true",
 			"git -C /work/app fetch sandbox-app --quiet",
-			"git -C /work/app rev-list --remotes=sandbox-app --not --remotes=origin",
+			"git -C /work/app rev-list --max-count=1 --remotes=sandbox-app --not --remotes=origin",
 			"sbx rm app",
 			"sbx ls",
 			"sbx create --clone --pull missing --name app /kits/markeli-claude /work/app");
@@ -266,7 +266,7 @@ public sealed class LauncherTests
 	public async Task Recreate_refuses_while_the_sandbox_has_unpushed_commits()
 	{
 		var fixture = new LauncherFixture { Exists = true };
-		fixture.Runner.On("git -C /work/app rev-list --remotes=sandbox-app --not --remotes=origin", 0, "abc123\ndef456\n");
+		fixture.Runner.On("git -C /work/app rev-list --max-count=1 --remotes=sandbox-app --not --remotes=origin", 0, "abc123\n");
 
 		var act = () => fixture.RunAsync(Defaults with { Recreate = true });
 
@@ -278,7 +278,7 @@ public sealed class LauncherTests
 	[Theory]
 	[InlineData("sbx exec app true", "cannot start sandbox-app")]
 	[InlineData("git -C /work/app fetch sandbox-app --quiet", "cannot fetch sandbox-app; is the sandbox still running? (sbx ls)")]
-	[InlineData("git -C /work/app rev-list --remotes=sandbox-app --not --remotes=origin", "cannot compare sandbox-app against origin")]
+	[InlineData("git -C /work/app rev-list --max-count=1 --remotes=sandbox-app --not --remotes=origin", "cannot compare sandbox-app against origin")]
 	public async Task Recreate_stops_when_the_unpushed_check_cannot_run(string failing, string message)
 	{
 		var fixture = new LauncherFixture { Exists = true };
@@ -300,5 +300,16 @@ public sealed class LauncherTests
 
 		(await act.Should().ThrowAsync<LauncherException>()).Which.ExitCode.Should().Be(1);
 		fixture.Runner.CommandLines.Should().NotContain(c => c.StartsWith("sbx create"));
+	}
+	[Fact]
+	public async Task Binds_no_secret_when_the_kit_cannot_be_written()
+	{
+		var fixture = new LauncherFixture();
+		fixture.Settings = fixture.Settings with { ResolveKit = _ => throw new UnauthorizedAccessException("read-only") };
+
+		var act = () => fixture.RunAsync(Defaults);
+
+		await act.Should().ThrowAsync<UnauthorizedAccessException>();
+		fixture.Runner.CommandLines.Should().NotContain(c => c.StartsWith("sbx secret") || c.StartsWith("sbx create"));
 	}
 }

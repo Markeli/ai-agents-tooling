@@ -47,6 +47,16 @@ public sealed class LauncherCommandTests
 		_options!.RepoPath.Should().Be("@repo");
 	}
 
+	[Theory]
+	[InlineData("false")]
+	[InlineData("true")]
+	public async Task Takes_a_repository_named_like_a_boolean_after_a_flag_as_the_path(string repo)
+	{
+		(await InvokeAsync("--recreate", "--yes", repo)).Should().Be(0);
+
+		_options.Should().BeEquivalentTo(new LauncherOptions { RepoPath = repo, Recreate = true, Yes = true });
+	}
+
 	[Fact]
 	public async Task Help_command_prints_the_same_help_as_the_option()
 	{
@@ -119,6 +129,23 @@ public sealed class LauncherCommandTests
 		exitCode.Should().Be(128);
 		_error.ToString().Should().BeEmpty();
 	}
+
+	[Theory]
+	[MemberData(nameof(FileSystemErrors))]
+	public async Task Prints_a_file_system_error_as_a_message_instead_of_a_stack_trace(Exception exception)
+	{
+		var exitCode = await LauncherCommand.InvokeAsync([], (_, _) => throw exception, _output, _error, CancellationToken.None);
+
+		exitCode.Should().Be(1);
+		_error.ToString().Should().Be($"agent-sandbox: {exception.Message}\n");
+	}
+
+	public static TheoryData<Exception> FileSystemErrors() =>
+	[
+		new UnauthorizedAccessException("Access to the path '/data/agent-sandbox' is denied."),
+		new IOException("No space left on device"),
+		new DirectoryNotFoundException("Could not find a part of the path '/missing/agent.sock'."),
+	];
 
 	private Task<int> InvokeAsync(params string[] args) =>
 		LauncherCommand.InvokeAsync(

@@ -11,6 +11,8 @@
 		<Version>1.0.0</Version>
 		<Description>Creates (once) and attaches to a Docker Sandbox running Claude Code as markeli-agent.</Description>
 		<RollForward>Major</RollForward>
+		<!-- The informational version names the directory the kits are written to: 1.0.0, not 1.0.0+<commit> -->
+		<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -19,7 +21,13 @@
 
 	<ItemGroup>
 		<!-- Every kit ships inside the tool, which can't find sandbox/kits from where it is installed (docs/adr/0003) -->
-		<EmbeddedResource Include="../../../kits/**" LogicalName="kits/%(RecursiveDir)%(Filename)%(Extension)" />
+		<!-- Only files inside a kit directory, without Finder's .DS_Store. WithCulture: spec.de.yaml is a kit file, not a
+		     German satellite resource -->
+		<EmbeddedResource
+			Include="../../../kits/*/**"
+			Exclude="../../../kits/**/.DS_Store"
+			LogicalName="kits/%(RecursiveDir)%(Filename)%(Extension)"
+			WithCulture="false" />
 	</ItemGroup>
 
 	<ItemGroup>

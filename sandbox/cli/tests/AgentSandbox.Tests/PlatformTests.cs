@@ -49,6 +49,17 @@ public sealed class MacBotSshAgentTests : IDisposable
 	}
 
 	[Fact]
+	public async Task Leaves_a_socket_in_a_missing_directory_to_ssh_agent()
+	{
+		var socket = Path.Combine(_directory, "missing", "agent.sock");
+		_runner.On("ssh-add -l", 2).On($"ssh-agent -a {socket}", 1);
+
+		var act = () => new MacBotSshAgent(_runner).EnsureLoadedAsync(socket, Key, CancellationToken.None);
+
+		(await act.Should().ThrowAsync<LauncherException>()).Which.Message.Should().Be($"cannot start ssh-agent on {socket}");
+	}
+
+	[Fact]
 	public async Task Stops_when_the_key_cannot_be_loaded()
 	{
 		_runner.On("ssh-add -l", 1).On($"ssh-agent -a {Socket}", 0).On($"ssh-add --apple-use-keychain {Key}", 1);

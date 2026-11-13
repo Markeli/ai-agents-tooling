@@ -32,13 +32,15 @@ internal sealed partial class Launcher(IProcessRunner runner, ISecretStore secre
 
 		if (!await SandboxExistsAsync(name, cancellationToken))
 		{
+			// Before the secrets: a kit that can't be written must not leave secrets bound to a sandbox that never appears
+			var kit = await settings.ResolveKit(cancellationToken);
+
 			// Sandbox-scoped secrets can exist before the sandbox; the kit's first-run approval then finds them
 			foreach (var (service, item) in Secrets)
 			{
 				await BindSecretAsync(name, service, item, cancellationToken);
 			}
 
-			var kit = await settings.ResolveKit(cancellationToken);
 			await RunInteractiveOrExitAsync(
 				Sbx("create", "--clone", "--pull", settings.Pull, "--name", name, kit, repo),
 				cancellationToken);
@@ -136,7 +138,7 @@ internal sealed partial class Launcher(IProcessRunner runner, ISecretStore secre
 		}
 
 		var compare = await runner.RunAsync(
-			new ProcessSpec("git", ["-C", repo, "rev-list", $"--remotes={remote}", "--not", "--remotes=origin"])
+			new ProcessSpec("git", ["-C", repo, "rev-list", "--max-count=1", $"--remotes={remote}", "--not", "--remotes=origin"])
 			{
 				StdErr = OutputMode.Inherit,
 			},
@@ -146,8 +148,8 @@ internal sealed partial class Launcher(IProcessRunner runner, ISecretStore secre
 			throw new LauncherException($"cannot compare {remote} against origin");
 		}
 
-		var unpushed = compare.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
-		if (unpushed is not null)
+		var unpushed = compare.StdOut.Trim();
+		if (unpushed.Length > 0)
 		{
 			throw new LauncherException(
 				$"{remote} has commits not pushed to origin (e.g. {unpushed}); push them first, then retry --recreate");

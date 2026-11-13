@@ -210,6 +210,7 @@ Environment overrides: `AGENT_SSH_SOCK` and `AGENT_SSH_KEY` (the bot's agent soc
 and `AGENT_SANDBOX_KIT` (a kit directory instead of the embedded one, e.g. `sandbox/kits/markeli-claude` to try a kit
 change without reinstalling). Every kit under `sandbox/kits/` is embedded; the launcher uses `markeli-claude` (choosing
 another is #31) and writes it to `~/.local/share/agent-sandbox/kits/<tool version>/` when a sandbox is created.
+That directory always mirrors the embedded kit; the kits of other tool versions are deleted.
 
 ### Several sandboxes for one repository
 
