@@ -29,6 +29,15 @@ capabilities:
           # microsoft-docs plugin: Microsoft Learn MCP server (https://learn.microsoft.com/api/mcp)
           - learn.microsoft.com
 
+  # The bot's ssh-agent (sbx setting ssh.agentSocketPath) for git pushes. A v3 sandbox gets no agent unless a kit asks
+  # for one, and the published claude kit doesn't. Bounded: the key only logs in to the two git hosts.
+  - type: com.docker.sandbox/ssh-agent@1
+    description: Push branches to GitHub and GitLab.com as markeli-agent
+    config:
+      phase: runtime
+      unrestricted: false
+      authenticate: [git@github.com, git@gitlab.com]
+
   # Plannotator's browser UI (PLANNOTATOR_PORT in the image); sbx picks a free host port, see `sbx ports <name>`
   - type: com.docker.sandbox/port@1
     config:
