@@ -9,7 +9,7 @@ internal sealed class LauncherFixture
 	public const string Repo = "/work/app";
 	public const string Socket = "/home/owner/.ssh/markeli-agent.sock";
 	public const string Kit = "/kits/markeli-claude";
-	public const string Digest = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+	public const string Image = "ghcr.io/markeli/claude-sandbox:latest";
 
 	public LauncherFixture(string name = "app")
 	{
@@ -20,16 +20,15 @@ internal sealed class LauncherFixture
 			.On("sbx ls", _ => new ProcessResult(0, Exists ? $"SANDBOX   AGENT\n{Name}   claude\n" : "SANDBOX   AGENT\n"))
 			.On($"sbx secret set github --sandbox {Name} --command lookup agent/personal-github", 0)
 			.On($"sbx secret set gitlab --sandbox {Name} --command lookup agent/personal-gitlab", 0)
-			.On($"sbx create --clone --pull missing --name {Name} {Kit} {Repo}", _ =>
+			.On($"sbx create --clone --pull missing --name {Name} --template {Image} claude --kit {Kit} {Repo}", _ =>
 			{
 				Exists = true;
 				return new ProcessResult(0);
 			})
-			.On($"sbx inspect {Name} --json", 0, $$"""{"name":"{{Name}}","image":"ghcr.io/markeli/claude-sandbox:latest@{{Digest}}"}""")
 			.On(
 				$"sbx exec {Name} sh -c cat /etc/claude-code/image-release 2>/dev/null || echo VERSION=unversioned",
 				0,
-				"VERSION=1.0.1\nTREE=abc\n")
+				"VERSION=1.0.1\nTREE=abc\nREVISION=0123456789abcdef0123456789abcdef01234567\n")
 			.On($"sbx run --name {Name}", 0)
 			.On($"sbx exec {Name} true", 0)
 			.On($"git -C {Repo} fetch sandbox-{Name} --quiet", 0)
@@ -50,7 +49,7 @@ internal sealed class LauncherFixture
 
 	public StringWriter Output { get; } = new();
 
-	public LauncherSettings Settings { get; set; } = new(Socket, "/home/owner/.ssh/markeli_agent", _ => Task.FromResult(Kit));
+	public LauncherSettings Settings { get; set; } = new(Socket, "/home/owner/.ssh/markeli_agent", Image, _ => Task.FromResult(Kit));
 
 	public Task<int> RunAsync(LauncherOptions options) =>
 		new Launcher(Runner, Secrets, SshAgent, Output).RunAsync(options, Settings, CancellationToken.None);

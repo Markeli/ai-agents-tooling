@@ -21,15 +21,14 @@ public sealed class LauncherTests
 			"sbx ls",
 			"sbx secret set github --sandbox app --command lookup agent/personal-github",
 			"sbx secret set gitlab --sandbox app --command lookup agent/personal-gitlab",
-			"sbx create --clone --pull missing --name app /kits/markeli-claude /work/app",
-			"sbx inspect app --json",
+			"sbx create --clone --pull missing --name app --template ghcr.io/markeli/claude-sandbox:latest claude --kit /kits/markeli-claude /work/app",
 			"sbx exec app sh -c cat /etc/claude-code/image-release 2>/dev/null || echo VERSION=unversioned",
 			"sbx run --name app");
 		fixture.Runner.Calls.Where(c => c.Interactive).Select(c => c.Spec.CommandLine).Should().Equal(
-			"sbx create --clone --pull missing --name app /kits/markeli-claude /work/app",
+			"sbx create --clone --pull missing --name app --template ghcr.io/markeli/claude-sandbox:latest claude --kit /kits/markeli-claude /work/app",
 			"sbx run --name app");
 		fixture.Output.ToString().Should().Be(
-			$"agent-sandbox: app runs ghcr.io/markeli/claude-sandbox:latest@{LauncherFixture.Digest}, version 1.0.1\n");
+			"agent-sandbox: app runs image version 1.0.1, revision 0123456\n");
 	}
 
 	[Fact]
@@ -70,11 +69,11 @@ public sealed class LauncherTests
 	}
 
 	[Fact]
-	public async Task Force_pull_creates_from_a_freshly_pulled_image_and_the_kit_comes_from_the_settings()
+	public async Task Force_pull_creates_from_a_freshly_pulled_image_and_the_image_and_kit_come_from_the_settings()
 	{
 		var fixture = new LauncherFixture();
-		fixture.Settings = fixture.Settings with { ResolveKit = _ => Task.FromResult("/tmp/my-kit") };
-		fixture.Runner.On("sbx create --clone --pull always --name app /tmp/my-kit /work/app", _ =>
+		fixture.Settings = fixture.Settings with { Image = "ghcr.io/markeli/claude-sandbox:1.0.1", ResolveKit = _ => Task.FromResult("/tmp/my-kit") };
+		fixture.Runner.On("sbx create --clone --pull always --name app --template ghcr.io/markeli/claude-sandbox:1.0.1 claude --kit /tmp/my-kit /work/app", _ =>
 		{
 			fixture.Exists = true;
 			return new ProcessResult(0);
@@ -82,7 +81,7 @@ public sealed class LauncherTests
 
 		(await fixture.RunAsync(Defaults with { ForcePull = true })).Should().Be(0);
 
-		fixture.Runner.CommandLines.Should().Contain("sbx create --clone --pull always --name app /tmp/my-kit /work/app");
+		fixture.Runner.CommandLines.Should().Contain("sbx create --clone --pull always --name app --template ghcr.io/markeli/claude-sandbox:1.0.1 claude --kit /tmp/my-kit /work/app");
 	}
 
 	[Theory]
@@ -99,7 +98,7 @@ public sealed class LauncherTests
 
 		(await fixture.RunAsync(Defaults with { Name = "blog-2" })).Should().Be(0);
 
-		fixture.Runner.CommandLines.Should().Contain("sbx create --clone --pull missing --name blog-2 /kits/markeli-claude /work/app");
+		fixture.Runner.CommandLines.Should().Contain("sbx create --clone --pull missing --name blog-2 --template ghcr.io/markeli/claude-sandbox:latest claude --kit /kits/markeli-claude /work/app");
 		fixture.Runner.CommandLines.Last().Should().Be("sbx run --name blog-2");
 	}
 
@@ -202,7 +201,7 @@ public sealed class LauncherTests
 	public async Task Exits_with_the_exit_code_of_a_failed_create()
 	{
 		var fixture = new LauncherFixture();
-		fixture.Runner.On("sbx create --clone --pull missing --name app /kits/markeli-claude /work/app", 2);
+		fixture.Runner.On("sbx create --clone --pull missing --name app --template ghcr.io/markeli/claude-sandbox:latest claude --kit /kits/markeli-claude /work/app", 2);
 
 		var act = () => fixture.RunAsync(Defaults);
 
@@ -215,12 +214,11 @@ public sealed class LauncherTests
 	{
 		var fixture = new LauncherFixture { Exists = true };
 		fixture.Runner
-			.On("sbx inspect app --json", 1)
 			.On("sbx exec app sh -c cat /etc/claude-code/image-release 2>/dev/null || echo VERSION=unversioned", 1);
 
 		(await fixture.RunAsync(Defaults)).Should().Be(0);
 
-		fixture.Output.ToString().Should().Be("agent-sandbox: app runs unknown, version unknown\n");
+		fixture.Output.ToString().Should().Be("agent-sandbox: app runs image version unknown\n");
 	}
 
 	[Fact]
@@ -237,7 +235,7 @@ public sealed class LauncherTests
 			"git -C /work/app rev-list --max-count=1 --remotes=sandbox-app --not --remotes=origin",
 			"sbx rm app",
 			"sbx ls",
-			"sbx create --clone --pull missing --name app /kits/markeli-claude /work/app");
+			"sbx create --clone --pull missing --name app --template ghcr.io/markeli/claude-sandbox:latest claude --kit /kits/markeli-claude /work/app");
 		fixture.Runner.Calls.Should().Contain(c => c.Spec.CommandLine == "sbx rm app" && c.Interactive);
 	}
 

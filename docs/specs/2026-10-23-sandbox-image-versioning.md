@@ -211,10 +211,13 @@ Out of scope (non-goals):
     `claude-sandbox.v*` release with a lower version, from the same major on `release/*`). If there is no previous
     release, or it has no inventory, the notes say so.
 24. `sandbox/bin/agent-sandbox` prints, after creating a sandbox or before attaching to one (also with `--no-attach`):
-    `agent-sandbox: <name> runs <image ref>@<digest>, version <VERSION>`. The image ref and digest come from
-    `sbx inspect "$name" --json` (field names are confirmed during implementation). `VERSION` comes from
-    `sbx exec "$name" cat /etc/claude-code/image-release`. Failing to read either prints `unknown` (or
+    `agent-sandbox: <name> runs image version <VERSION>, revision <REVISION>` (the revision abbreviated to seven
+    characters and left out when the file has none). Both come from
+    `sbx exec "$name" cat /etc/claude-code/image-release`. Failing to read it prints `unknown` (or
     `unversioned` when the file is missing, as in images from before 1.0.0) and never fails the launcher.
+    Changed with the move to v3 kits (sbx 0.51+): the line used to carry `<image ref>@<digest>` from
+    `sbx inspect "$name" --json`, which now reports the image sbx assembles from the kits
+    (`sandbox-kit-assembled:<hash>`) instead of the template.
 
 ### Cleanup
 

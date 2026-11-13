@@ -24,8 +24,10 @@ internal sealed record LauncherOptions
 /// <summary>Host settings, overridable through environment variables.</summary>
 /// <param name="SshSocket">The bot's ssh-agent socket (<c>AGENT_SSH_SOCK</c>).</param>
 /// <param name="SshKey">The bot's private key (<c>AGENT_SSH_KEY</c>).</param>
+/// <param name="Image">The toolchain image for <c>sbx create --template</c> (<c>AGENT_SANDBOX_IMAGE</c>).</param>
 /// <param name="ResolveKit">Returns the kit directory (<c>AGENT_SANDBOX_KIT</c>, or an embedded kit), only when needed.</param>
 internal sealed record LauncherSettings(
 	string SshSocket,
 	string SshKey,
+	string Image,
 	Func<CancellationToken, Task<string>> ResolveKit);

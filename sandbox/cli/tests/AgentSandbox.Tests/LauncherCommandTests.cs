@@ -67,7 +67,8 @@ public sealed class LauncherCommandTests
 
 		(await InvokeAsync("help")).Should().Be(0);
 
-		_output.ToString().Should().Be(optionHelp).And.Contain("Usage:").And.Contain("--recreate").And.Contain("help");
+		// No heading such as "Usage:" here: System.CommandLine translates those to the machine's language
+		_output.ToString().Should().Be(optionHelp).And.Contain("REPO_PATH").And.Contain("--recreate").And.Contain("help");
 		_options.Should().BeNull();
 	}
 

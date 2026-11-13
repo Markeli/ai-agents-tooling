@@ -16,7 +16,7 @@ sandbox/
 │   ├── CLAUDE.md           bot rules entry point, loaded as managed instructions
 │   ├── rules/              topic rules the entry point tells the bot to read on demand
 │   └── templates/          spec and ADR templates (/etc/claude-code/templates)
-├── kits/markeli-claude/    v2 kit: extends built-in claude; network rules, Plannotator port, gitlab credential
+├── kits/markeli-claude/    v3 mixin for sbx's claude kit: network rules, bot ssh-agent, Plannotator port, gitlab credential
 └── cli/                    agent-sandbox launcher: a .NET global tool (Cake build) with the kits embedded
 ```
 
@@ -213,6 +213,14 @@ launcher uses `markeli-claude` (choosing another is #31) and writes it to
 `~/.local/share/agent-sandbox/kits/<tool version>/` when a sandbox is created.
 That directory always mirrors the embedded kit; the kits of other tool versions are deleted.
 
+The sandbox is sbx's own `claude` agent with two additions, which needs sbx 0.51 or newer (built-in agents are
+published v3 kits since then; checked with 0.53.0): the toolchain image as its template and the kit as a mixin. The
+launcher runs `sbx create --clone --pull missing --name <name> --template <image> claude --kit <kit> <repo>`.
+`AGENT_SANDBOX_IMAGE` replaces the image (default `ghcr.io/markeli/claude-sandbox:latest`). The kit asks for what a v3
+sandbox doesn't get by itself: the network rules, the Plannotator port, the gitlab credential and the bot's ssh-agent,
+limited to logging in as `git` on github.com and gitlab.com. Sandboxes created from the earlier v2 kit keep running;
+new ones can't be created from it.
+
 ### Several sandboxes for one repository
 
 Pass `--name NAME` to run more than one sandbox against the same repository in parallel — e.g. to work on two
@@ -258,7 +266,7 @@ is in [the spec](../docs/specs/2026-10-23-sandbox-image-versioning.md) and ADRs
 | --- | --- |
 | `x.y.z` | A release; immutable, CI never writes an existing one |
 | `x.y`, `x` | The highest release of that minor or major line |
-| `latest` | The highest release from `main` (maintenance releases never move it); the kit's default |
+| `latest` | The highest release from `main` (maintenance releases never move it); the launcher's default |
 | `tree-<hash>` | One build per git tree of `sandbox/image`, never rebuilt; internal, deleted after 30 days unless released |
 | `sha-<short>` | Legacy: no longer published; existing tags stay |
 
@@ -307,14 +315,14 @@ images built by a PR, which a merge retags without rebuilding, so it can differ 
 `claude-sandbox.v<x.y.z>` points at that one). The OCI labels `org.opencontainers.image.version`, `revision` and
 `created` carry the same. `/etc/claude-code/inventory.sh` lists the toolchain as built. Claude Code and its plugins
 keep auto-updating at runtime, so a long-running sandbox can be ahead of its inventory. `agent-sandbox` prints the
-image reference, digest and version of the sandbox it creates or attaches to.
+image version and revision of the sandbox it creates or attaches to.
 
-### Pinning the kit and rolling back
+### Pinning the image and rolling back
 
-The kit (`sandbox/kits/markeli-claude/spec.yaml`) uses `latest`, and **existing sandboxes are unaffected** by new
-releases: the image is resolved once, at `sbx create`. To keep new sandboxes on a known release, or to roll back,
-set `image: ghcr.io/markeli/claude-sandbox:<x.y.z>` (or `:<x>` to follow a major) in `spec.yaml`, run
-`make validate`, and recreate the sandbox (below). The GitHub releases list what changed between versions.
+The launcher uses `latest`, and **existing sandboxes are unaffected** by new releases: the image is resolved once, at
+`sbx create`. To keep new sandboxes on a known release, or to roll back, set
+`AGENT_SANDBOX_IMAGE=ghcr.io/markeli/claude-sandbox:<x.y.z>` (or `:<x>` to follow a major) for `agent-sandbox`, and
+recreate the sandbox (below). The GitHub releases list what changed between versions.
 
 ### Maintenance of an older major
 
@@ -368,10 +376,10 @@ agent-sandbox ~/Development/Personal/<repo>                            # reuses 
 agent-sandbox --force-pull ~/Development/Personal/<repo>               # pulls the current remote `latest`
 ```
 
-`agent-sandbox` prints the version it runs (`agent-sandbox: <name> runs <image>@<digest>, version 1.3.0`); compare
-it with the [releases](https://github.com/Markeli/ai-agents-tooling/releases) to see what a recreate brings. A
-local `make load` build reports `0.0.0+local`. To recreate on a specific release instead of `latest`, pin the kit
-first ([Pinning the kit and rolling back](#pinning-the-kit-and-rolling-back)).
+`agent-sandbox` prints the version it runs (`agent-sandbox: <name> runs image version 1.3.0, revision 0123456`);
+compare it with the [releases](https://github.com/Markeli/ai-agents-tooling/releases) to see what a recreate brings. A
+local `make load` build reports `0.0.0+local`. To recreate on a specific release instead of `latest`, pin the image
+([Pinning the image and rolling back](#pinning-the-image-and-rolling-back)).
 
 `--recreate` refuses to remove a sandbox whose clone has commits not pushed to `origin`, checked via the
 `sandbox-<name>` git remote that clone mode adds to the host repo (no access into the sandbox itself is needed).
