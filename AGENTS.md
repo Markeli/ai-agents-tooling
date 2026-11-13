@@ -29,7 +29,8 @@ Personal monorepo for AI agent tooling: skills, MCP servers, Claude plugins, sys
   the Renovate validator.
 - `agent-sandbox` launcher (`sandbox/cli`): run `dotnet tool restore && dotnet cake` there (Default: build and test;
   `--target=Format` checks formatting). `global.json` selects Microsoft.Testing.Platform (xunit.v3), so a plain
-  `dotnet test` needs `--solution AgentSandbox.slnx`.
+  `dotnet test` needs `--solution AgentSandbox.slnx`. The owner's host runs in Russian and System.CommandLine translates
+  its help headings and parse errors: don't assert on them, and check with `LC_ALL=ru_RU.UTF-8 dotnet test ...`.
 - sbx kits (`sandbox/kits/`): sbx reads a kit directory's descriptor only as `spec.yaml`, v3 descriptors included,
   not as `<name>.yaml` like the examples of the v3 spec. `sbx` isn't available in the agent sandbox: `make validate`
   and any sandbox creation run on the owner's host.
