@@ -42,12 +42,12 @@ public sealed class EmbeddedKitsTests : IDisposable
 	[Fact]
 	public async Task Rewrites_a_kit_file_that_differs()
 	{
-		var spec = Path.Combine(await ExtractAsync(EmbeddedKits.Default), "markeli-claude.yaml");
+		var spec = Path.Combine(await ExtractAsync(EmbeddedKits.Default), "spec.yaml");
 		await File.WriteAllTextAsync(spec, "stale", TestContext.Current.CancellationToken);
 
 		await ExtractAsync(EmbeddedKits.Default);
 
-		File.ReadAllText(spec).Should().Be(File.ReadAllText(Path.Combine(RepositoryKits(), EmbeddedKits.Default, "markeli-claude.yaml")));
+		File.ReadAllText(spec).Should().Be(File.ReadAllText(Path.Combine(RepositoryKits(), EmbeddedKits.Default, "spec.yaml")));
 	}
 
 	[Fact]
@@ -69,7 +69,7 @@ public sealed class EmbeddedKitsTests : IDisposable
 		var kits = Path.Combine(_dataDirectory, "agent-sandbox", "kits");
 		Directory.CreateDirectory(Path.Combine(kits, "1.2.2", EmbeddedKits.Default));
 		await File.WriteAllTextAsync(
-			Path.Combine(kits, "1.2.2", EmbeddedKits.Default, "markeli-claude.yaml"), "old", TestContext.Current.CancellationToken);
+			Path.Combine(kits, "1.2.2", EmbeddedKits.Default, "spec.yaml"), "old", TestContext.Current.CancellationToken);
 
 		await ExtractAsync(EmbeddedKits.Default);
 
