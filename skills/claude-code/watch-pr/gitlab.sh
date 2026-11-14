@@ -7,7 +7,7 @@
 gitlab_snapshot() {
 	local project=$1 number=$2 api mr discussions reviewers jobs='[]' head_date=null pipeline
 	api="projects/$(jq -rn --arg p "$project" '$p | @uri')"
-	mr=$(gitlab_get "$api/merge_requests/$number") || return
+	mr=$(gitlab_get --fatal "$api/merge_requests/$number") || return
 	discussions=$(gitlab_get --paginate "$api/merge_requests/$number/discussions?per_page=100") || return
 	reviewers=$(gitlab_get "$api/merge_requests/$number/reviewers") || return
 	pipeline=$(jq -r 'select(.head_pipeline.status == "failed") | .head_pipeline.id' <<<"$mr")
@@ -19,17 +19,23 @@ gitlab_snapshot() {
 	if [ ! -s "$state_file" ]; then
 		head_date=$(gitlab_get "$api/repository/commits/$(jq -r .sha <<<"$mr")" | jq '.committed_date') || return
 	fi
-	jq -n --argjson mr "$mr" --argjson discussions "$(jq -s 'add // []' <<<"$discussions")" \
-		--argjson reviewers "$reviewers" --argjson jobs "$(jq -s 'add // []' <<<"$jobs")" \
+	# Files, not arguments: long discussions outgrow the argument size limit
+	jq -n --slurpfile mrs <(printf '%s\n' "$mr") --slurpfile pages <(printf '%s\n' "$discussions") \
+		--slurpfile reviewer_lists <(printf '%s\n' "$reviewers") --slurpfile job_pages <(printf '%s\n' "$jobs") \
 		--argjson head_date "${head_date:-null}" "$gitlab_normalize" || {
 		echo "unexpected GitLab answer for $api/merge_requests/$number" >&2
 		return 1
 	}
 }
 
-# glab api with its stderr as the reason. Returns 1 (transient) or 2 (bad credentials, no access, not found).
+# glab api with its stderr as the reason. Returns 1 (transient), or with --fatal first, 2 when the API answers 401,
+# 403 or 404: no credentials, no access or no such MR. Other requests' errors are all transient.
 gitlab_get() {
-	local error_file response status error
+	local error_file response status error fatal=false
+	if [ "$1" = --fatal ]; then
+		fatal=true
+		shift
+	fi
 	error_file=$(mktemp)
 	response=$(glab api "$@" 2>"$error_file")
 	status=$?
@@ -37,7 +43,7 @@ gitlab_get() {
 	rm -f "$error_file"
 	if [ "$status" != 0 ]; then
 		printf '%s\n' "$error" >&2
-		if ! grep -qiE 'rate limit|429' <<<"$error" && grep -qE '40[134]' <<<"$error"; then
+		if $fatal && grep -qE '(HTTP|^glab:) 40[134]([^0-9]|$)' <<<"$error"; then
 			return 2
 		fi
 		return 1
@@ -48,7 +54,11 @@ gitlab_get() {
 # jq variables, not shell ones
 # shellcheck disable=SC2016
 gitlab_normalize='
-{
+$mrs[0] as $mr
+| ([$pages[][]]) as $discussions
+| ($reviewer_lists[0] // []) as $reviewers
+| ([$job_pages[][]]) as $jobs
+| {
   url: $mr.web_url,
   state: ({opened: "open", merged: "merged"}[$mr.state] // "closed"),
   head: {sha: $mr.sha, date: $head_date},

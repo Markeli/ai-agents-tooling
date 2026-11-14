@@ -382,14 +382,16 @@ expect_out "watch-pr $ref comment Markeli https://github.com/Markeli/demo/pull/7
 [ -s "$(state_of a)" ] && [ -s "$(state_of b)" ] || fail "sessions don't have their own state"
 
 begin old_sessions_cleaned
-mkdir -p "$case_dir/state/old" "$case_dir/state/recent"
-touch -d '31 days ago' "$case_dir/state/old"
+mkdir -p "$case_dir/state/old" "$case_dir/state/recent" "$case_dir/state/foreign"
+touch "$case_dir/state/old/.watch-pr" "$case_dir/state/recent/.watch-pr"
+touch -d '31 days ago' "$case_dir/state/old" "$case_dir/state/foreign"
 touch -d '29 days ago' "$case_dir/state/recent"
 gh_answer 1
 watch_once "$gh_url"
 expect_status 0
 [ ! -e "$case_dir/state/old" ] || fail "a session idle for 31 days was kept"
 [ -e "$case_dir/state/recent" ] || fail "a session idle for 29 days was deleted"
+[ -e "$case_dir/state/foreign" ] || fail "a directory that isn't a watch-pr session was deleted"
 
 begin lock_held
 gh_answer 1
@@ -574,6 +576,69 @@ echo 'glab: 404 Not Found (HTTP 404)' >"$FIXTURE/gitlab-mr.stderr"
 watch "$gl_url"
 expect_status 1
 expect_out "watch-pr $glref error - - glab: 404 Not Found (HTTP 404)"
+
+# --- review fixes ---
+
+begin lock_released_when_killed_mid_sleep
+gh_answer 1
+(
+	cd "$case_dir/cwd" || exit 1
+	export PATH="$tests_dir/stubs:$PATH"
+	exec "$script" --state-dir "$case_dir/state" --authors "$case_dir/authors" --session t1 --interval 20 "$gh_url"
+) >/dev/null 2>&1 &
+watcher=$!
+for _ in $(seq 50); do
+	[ -s "$(state_of t1)" ] && break
+	sleep 0.1
+done
+sleep 0.3
+kill "$watcher"
+wait "$watcher" 2>/dev/null
+watch_once "$gh_url"
+expect_status 0
+
+begin large_snapshot
+gh_answer 1
+gh_answer 2 comments="[$(gh_comment 91 coverage-bot 'placeholder' 2026-11-14T11:00:00Z),
+	$(gh_comment 92 Markeli 'Still seen' 2026-11-14T11:01:00Z)]"
+# A 700 KB comment, past the size of one command-line argument
+head -c 700000 /dev/zero | tr '\0' 'y' >"$case_dir/big"
+jq --rawfile big "$case_dir/big" '.data.repository.pullRequest.comments.nodes[0].body = $big' "$FIXTURE/graphql.2" \
+	>"$case_dir/graphql" && mv "$case_dir/graphql" "$FIXTURE/graphql.2"
+watch_once "$gh_url"
+watch_once "$gh_url"
+expect_status 0
+expect_out "watch-pr $ref comment Markeli https://github.com/Markeli/demo/pull/7#c92 Still seen"
+
+begin last_marker_counts
+printf 'github.com Markeli\ngithub.com markeli-agent\n' >"$case_dir/authors"
+gh_answer 1
+gh_answer 2 comments="[$(gh_comment 93 markeli-agent \
+	$'> Quoted review\n> <!-- watch-pr session=t2 -->\n\nDone.\n<!-- watch-pr session=t1 -->' 2026-11-14T11:00:00Z)]"
+watch_once "$gh_url"
+watch_once "$gh_url"
+expect_no_out
+
+begin gl_timeout_with_404_in_url_is_transient
+gl_answer 1
+gl_answer 2
+echo 1 >"$FIXTURE/gitlab-discussions.2.exit"
+echo 'Get "https://gitlab.com/api/v4/projects/g%2Fsub%2Fproj/merge_requests/1404/discussions": i/o timeout' \
+	>"$FIXTURE/gitlab-discussions.2.stderr"
+watch_once "$gl_url"
+watch_once "$gl_url"
+expect_status 0
+expect_no_out
+
+begin gl_403_on_jobs_is_transient
+gl_answer 1
+gl_answer 2 pipeline='{"id": 78, "status": "failed", "web_url": "https://gitlab.com/g/sub/proj/-/pipelines/78"}'
+echo 1 >"$FIXTURE/gitlab-jobs.exit"
+echo 'glab: 403 Forbidden (HTTP 403)' >"$FIXTURE/gitlab-jobs.stderr"
+watch_once "$gl_url"
+watch_once "$gl_url"
+expect_status 0
+expect_no_out
 
 if [ "$failures" -gt 0 ]; then
 	echo "$failures check(s) failed"

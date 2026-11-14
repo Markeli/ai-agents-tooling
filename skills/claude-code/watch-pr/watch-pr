@@ -173,20 +173,22 @@ mkdir -p "$(dirname "$state_file")" || die_usage "can't create the state directo
 # One watcher per PR/MR and session; the kernel drops the lock with the process, so a crash leaves none behind
 exec 9>"$state_file.lock"
 flock -n 9 || die_usage "$ref is already watched in this session (lock $state_file.lock)"
-# Sessions idle for 30 days are gone; this one's mtime marks it as used
-find "$state_root" -mindepth 1 -maxdepth 1 -type d -mtime +30 ! -name "$session" -exec rm -rf {} +
-touch "$state_root/$session"
+# Sessions idle for 30 days are gone; this one's mtime marks it as used. Only directories with the .watch-pr mark
+# are sessions, so a --state-dir pointing elsewhere loses nothing.
+find "$state_root" -mindepth 1 -maxdepth 1 -type d -mtime +30 ! -name "$session" \
+	-exec sh -c '[ -e "$1/.watch-pr" ] && rm -rf "$1"' sh {} \;
+touch "$state_root/$session/.watch-pr" "$state_root/$session"
 echo "watch-pr: watching $ref every ${interval}s, state in $state_file" >&2
 
 bot_login=markeli-agent
 
 # Reports the events of the snapshot in $1 and saves the next state. Returns 10 when the PR/MR has ended.
 report() {
-	local previous=null result
-	[ ! -s "$state_file" ] || previous=$(cat "$state_file")
-	result=$(jq -n -f "$self_dir/events.jq" --argjson state "$previous" \
-		--arg authors "$authors" --arg me "$bot_login" --arg session "$session" --arg ref "$ref" \
-		--argjson snap "$(cat "$1")") || {
+	local previous=/dev/null result
+	[ ! -s "$state_file" ] || previous=$state_file
+	# Files, not arguments: a snapshot with long comments outgrows the argument size limit
+	result=$(jq -n -f "$self_dir/events.jq" --slurpfile snaps "$1" --slurpfile states "$previous" \
+		--arg authors "$authors" --arg me "$bot_login" --arg session "$session" --arg ref "$ref") || {
 		echo "watch-pr: can't diff the snapshot of $ref" >&2
 		return 1
 	}
@@ -229,30 +231,40 @@ trap 'rm -f "$poll_file" "$snapshot_file" "$error_file"' EXIT
 
 failed_polls=0
 warned=false
+# A failed poll or diff: warns once after 10 in a row
+count_failure() {
+	cat "$error_file" >&2
+	failed_polls=$((failed_polls + 1))
+	if ((failed_polls >= 10)) && ! $warned; then
+		echo "watch-pr $ref warning - - $(reason)"
+		warned=true
+	fi
+}
+
 polls=0
+# fd 9 holds the lock: closed for the loop, so no child (gh, jq, sleep) inherits it and keeps the lock after this
+# shell is killed. Bash keeps its own copy, close-on-exec, for the loop's duration.
 while :; do
 	polls=$((polls + 1))
 	poll >"$poll_file" 2>"$error_file"
 	case $? in
 	0)
 		cp "$poll_file" "$snapshot_file"
-		failed_polls=0
-		warned=false
-		report "$snapshot_file"
-		[ $? != 10 ] || exit 0
+		report "$snapshot_file" 2>"$error_file"
+		case $? in
+		0)
+			failed_polls=0
+			warned=false
+			;;
+		10) exit 0 ;;
+		*) count_failure ;;
+		esac
 		;;
 	2)
 		echo "watch-pr $ref error - - $(reason)"
 		exit 1
 		;;
-	*)
-		cat "$error_file" >&2
-		failed_polls=$((failed_polls + 1))
-		if ((failed_polls >= 10)) && ! $warned; then
-			echo "watch-pr $ref warning - - $(reason)"
-			warned=true
-		fi
-		;;
+	*) count_failure ;;
 	esac
 	if $once; then
 		exit 0
@@ -267,4 +279,4 @@ while :; do
 	fi
 	[ -z "${WATCH_PR_TRACE:-}" ] || echo "sleep $pause" >>"$WATCH_PR_TRACE"
 	"${WATCH_PR_SLEEP:-sleep}" "$pause"
-done
+done 9>&-
