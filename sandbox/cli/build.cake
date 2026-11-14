@@ -25,7 +25,23 @@ Task("Test")
 	.IsDependentOn("Build")
 	.Does(() => Dotnet("test", "--solution", Solution, "--configuration", configuration, "--no-build"));
 
+// The tool version is released with its notes: the first "## [x.y.z]" section of CHANGELOG.md is <Version>
+Task("Changelog")
+	.Does(() =>
+	{
+		var version = XmlPeek(ToolProject, "/Project/PropertyGroup/Version");
+		var released = System.IO.File.ReadLines("./CHANGELOG.md")
+			.Select(line => System.Text.RegularExpressions.Regex.Match(line, @"^## \[(\d+\.\d+\.\d+)\]"))
+			.FirstOrDefault(match => match.Success)?.Groups[1].Value;
+		if (released != version)
+		{
+			throw new CakeException(
+				$"{ToolProject} has version {version}, but CHANGELOG.md starts with {released ?? "no version"}: add a ## [{version}] section");
+		}
+	});
+
 Task("Default")
+	.IsDependentOn("Changelog")
 	.IsDependentOn("Build")
 	.IsDependentOn("Test");
 
@@ -41,7 +57,7 @@ Task("Pack")
 		OutputDirectory = artifacts,
 	}));
 
-// Uninstalls first: dotnet tool update keeps an installed package of the same version, so a rebuilt 0.1.0 with a
+// Uninstalls first: dotnet tool update keeps an installed package of the same version, so a rebuilt version with a
 // changed kit would never reach the host. Before that the package is installed into a scratch directory, so one that
 // can't be installed doesn't cost the host its working agent-sandbox. The version is pinned so that no other source
 // can supply the package.

@@ -18,6 +18,7 @@ sandbox/
 │   └── templates/          spec and ADR templates (/etc/claude-code/templates)
 ├── kits/markeli-claude/    v3 mixin for sbx's claude kit: network rules, bot ssh-agent, Plannotator port, gitlab credential
 └── cli/                    agent-sandbox launcher: a .NET global tool (Cake build) with the kits embedded
+    └── CHANGELOG.md        launcher version and release notes, kit changes included
 ```
 
 ## Toolchain in the image
@@ -248,10 +249,14 @@ is in `cli/src/AgentSandbox` (`Launcher` holds the create/recreate/attach logic;
 
 ```bash
 cd sandbox/cli && dotnet tool restore
-dotnet cake                    # Default: clean, build, test
+dotnet cake                    # Default: changelog check, clean, build, test
 dotnet cake --target=Format    # dotnet format --verify-no-changes
 dotnet cake --target=Install   # pack and (re)install the global tool
 ```
+
+A change to the launcher or a kit bumps `<Version>` in `cli/src/AgentSandbox/AgentSandbox.csproj` (SemVer) and adds
+its notes as a new first section of [`cli/CHANGELOG.md`](cli/CHANGELOG.md); `dotnet cake` fails when the two differ.
+The image has its own version and CHANGELOG (see Image versioning).
 
 ## Image versioning
 
