@@ -4,32 +4,33 @@ using System.Diagnostics;
 namespace AgentSandbox.Processes;
 
 /// <inheritdoc />
-internal sealed class ProcessRunner : IProcessRunner
+/// <param name="searchPath">The directories to look programs up in, as in PATH; null reads PATH at each start.</param>
+internal sealed class ProcessRunner(string? searchPath = null) : IProcessRunner
 {
+	private const int CannotExecute = 126;
 	private const int CommandNotFound = 127;
+
+	private const UnixFileMode Executable = UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute;
 
 	public async Task<ProcessResult> RunAsync(ProcessSpec spec, CancellationToken cancellationToken)
 	{
-		var startInfo = CreateStartInfo(spec);
-		startInfo.RedirectStandardOutput = spec.StdOut == OutputMode.Capture;
-		startInfo.RedirectStandardError = spec.StdErr == OutputMode.Capture;
-
-		using var process = TryStart(startInfo, out var notFound);
+		using var process = TryStart(spec, captureStdOut: spec.StdOut == OutputMode.Capture,
+			captureStdErr: spec.StdErr == OutputMode.Capture, out var failure);
 		if (process is null)
 		{
 			if (spec.StdErr == OutputMode.Inherit)
 			{
-				await Console.Error.WriteLineAsync(notFound);
-				return new ProcessResult(CommandNotFound);
+				await Console.Error.WriteLineAsync(failure.StdErr);
+				return failure with { StdErr = string.Empty };
 			}
 
-			return new ProcessResult(CommandNotFound, StdErr: notFound);
+			return failure;
 		}
 
-		var stdOut = startInfo.RedirectStandardOutput
+		var stdOut = process.StartInfo.RedirectStandardOutput
 			? process.StandardOutput.ReadToEndAsync(cancellationToken)
 			: Task.FromResult(string.Empty);
-		var stdErr = startInfo.RedirectStandardError
+		var stdErr = process.StartInfo.RedirectStandardError
 			? process.StandardError.ReadToEndAsync(cancellationToken)
 			: Task.FromResult(string.Empty);
 		await process.WaitForExitAsync(cancellationToken);
@@ -43,11 +44,11 @@ internal sealed class ProcessRunner : IProcessRunner
 		Console.CancelKeyPress += KeepRunning;
 		try
 		{
-			using var process = TryStart(CreateStartInfo(spec), out var notFound);
+			using var process = TryStart(spec, captureStdOut: false, captureStdErr: false, out var failure);
 			if (process is null)
 			{
-				await Console.Error.WriteLineAsync(notFound);
-				return CommandNotFound;
+				await Console.Error.WriteLineAsync(failure.StdErr);
+				return failure.ExitCode;
 			}
 
 			await process.WaitForExitAsync(cancellationToken);
@@ -59,9 +60,48 @@ internal sealed class ProcessRunner : IProcessRunner
 		}
 	}
 
-	private static ProcessStartInfo CreateStartInfo(ProcessSpec spec)
+	/// <summary>
+	/// Finds a program like a shell does: a name with a slash is a path, any other name is the first executable file of
+	/// that name in <paramref name="path"/>. Unlike <see cref="Process.Start(ProcessStartInfo)"/>, never the current
+	/// directory or the tool's own: a file named sbx or git in the repository would otherwise run instead.
+	/// </summary>
+	/// <returns>The program to start, or null when <paramref name="path"/> has none.</returns>
+	internal static string? Resolve(string fileName, string? path)
 	{
-		var startInfo = new ProcessStartInfo(spec.FileName) { UseShellExecute = false };
+		if (fileName.Contains('/') || OperatingSystem.IsWindows())
+		{
+			return fileName;
+		}
+
+		// An empty entry means the current directory to a POSIX shell: skipped on purpose
+		foreach (var directory in (path ?? string.Empty).Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+		{
+			var candidate = Path.Combine(directory, fileName);
+			if (File.Exists(candidate) && (File.GetUnixFileMode(candidate) & Executable) != 0)
+			{
+				return candidate;
+			}
+		}
+
+		return null;
+	}
+
+	private Process? TryStart(ProcessSpec spec, bool captureStdOut, bool captureStdErr, out ProcessResult failure)
+	{
+		failure = new ProcessResult(0);
+		var fileName = Resolve(spec.FileName, searchPath ?? Environment.GetEnvironmentVariable("PATH"));
+		if (fileName is null)
+		{
+			failure = new ProcessResult(CommandNotFound, StdErr: $"{spec.FileName}: command not found");
+			return null;
+		}
+
+		var startInfo = new ProcessStartInfo(fileName)
+		{
+			UseShellExecute = false,
+			RedirectStandardOutput = captureStdOut,
+			RedirectStandardError = captureStdErr,
+		};
 		foreach (var argument in spec.Arguments)
 		{
 			startInfo.ArgumentList.Add(argument);
@@ -72,18 +112,15 @@ internal sealed class ProcessRunner : IProcessRunner
 			startInfo.Environment[name] = value;
 		}
 
-		return startInfo;
-	}
-
-	private static Process? TryStart(ProcessStartInfo startInfo, out string notFound)
-	{
-		notFound = $"{startInfo.FileName}: command not found";
 		try
 		{
 			return Process.Start(startInfo);
 		}
-		catch (Win32Exception)
+		catch (Win32Exception e)
 		{
+			// The exception's own message wraps the reason in the path and working directory; the error code alone reads
+			// like a shell's "Permission denied" or "Exec format error"
+			failure = new ProcessResult(CannotExecute, StdErr: $"{fileName}: {new Win32Exception(e.NativeErrorCode).Message}");
 			return null;
 		}
 	}
