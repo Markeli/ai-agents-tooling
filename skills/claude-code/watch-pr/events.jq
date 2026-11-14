@@ -50,7 +50,7 @@ def line($kind; $author; $url; $text): "watch-pr \($ref) \($kind) \($author | fi
       (.verdict + (if (.body // "" | one_line) == "" then "" else ": " + (.body | one_line) end)) | excerpt
     else .body | excerpt end;
 # Check names and links come from any CI app: printed only in a strict charset, so they can't carry instructions
-def check_name: gsub("[^A-Za-z0-9 ._/:()-]"; "_") | .[0:100];
+def check_name: gsub("[^A-Za-z0-9 ,._/:()-]"; "_") | .[0:100];
 def check_url: if (. // "") | test("^https://[A-Za-z0-9.-]+(/[A-Za-z0-9._~%/:?#=&+-]*)?$") then . else "-" end;
 {
     lines: (
@@ -60,13 +60,21 @@ def check_url: if (. // "") | test("^https://[A-Za-z0-9.-]+(/[A-Za-z0-9._~%/:?#=
       else
         [$new[] | line(.kind; .author; .url; text)]
       end
+      # GitLab reviewer verdicts: a change of an allow-listed reviewer's state, not caught up on a first poll
+      + (if $state == null then [] else
+          [($snap.reviewers // {}) | to_entries[]
+            | select(.value == "requested_changes" or .value == "approved")
+            | select(.value != ($previous.reviewers[.key] // null))
+            | select(.key | ascii_downcase as $login | any($allowed[]; . == $login) and $login != $bot)
+            | line("review"; .key; $snap.url; .value)]
+        end)
       + [$failed[] | line("ci-failed"; null; .url | check_url; .name | check_name | excerpt)]
       + (if $ended then [line($snap.state; null; $snap.url; "-")] else [] end)
     ),
     state: {
       seen: ($previous.seen + [$items[].id] | unique),
       failed: ($previous.failed + [$snap.failed[].key] | unique),
-      reviewers: ($snap.reviewers // $previous.reviewers)
+      reviewers: ($snap.reviewers // $previous.reviewers // {})
     },
     ended: $ended
   }

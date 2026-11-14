@@ -459,6 +459,119 @@ expect_status 3
 	fail "sleeps: $(tr '\n' ' ' <"$case_dir/trace")"
 [ "$(grep -c 'polling every 300s' "$case_dir/err")" = 1 ] || fail "slow-down notes: $(cat "$case_dir/err")"
 
+# --- GitLab ---
+
+glref='g/sub/proj!3'
+gl_mr_url=https://gitlab.com/g/sub/proj/-/merge_requests/3
+
+# A note: $1 id, $2 login, $3 body, $4 time, $5 "system" for a system note
+gl_note() {
+	jq -cn --argjson id "$1" --arg login "$2" --arg body "$3" --arg at "$4" --arg system "${5:-}" \
+		'{id: $id, author: {username: $login}, body: $body, created_at: $at, system: ($system == "system")}'
+}
+
+# A discussion: $1 "individual" or "thread", then its notes
+gl_discussion() {
+	local kind=$1
+	shift
+	jq -cn --arg kind "$kind" --argjson notes "[$(IFS=,; echo "$*")]" \
+		'{individual_note: ($kind == "individual"), notes: $notes}'
+}
+
+# Writes the n-th poll's GitLab answers. $1 n; then key=value pairs: state (opened), discussions, reviewers (JSON
+# arrays, default []), pipeline (JSON or null)
+gl_answer() {
+	local n=$1 state=opened discussions='[]' reviewers='[]' pipeline=null
+	shift
+	local pair
+	for pair in "$@"; do
+		local "$pair"
+	done
+	jq -n --arg state "$state" --argjson pipeline "$pipeline" \
+		'{iid: 3, web_url: "https://gitlab.com/g/sub/proj/-/merge_requests/3", state: $state, sha: "b1",
+		  head_pipeline: $pipeline}' >"$FIXTURE/gitlab-mr.$n"
+	printf '%s\n' "$discussions" >"$FIXTURE/gitlab-discussions.$n"
+	printf '%s\n' "$reviewers" >"$FIXTURE/gitlab-reviewers.$n"
+	[ -e "$FIXTURE/gitlab-commit" ] || echo '{"committed_date": "2026-11-14T13:00:00.000+03:00"}' >"$FIXTURE/gitlab-commit"
+}
+
+gl_reviewer() { jq -cn --arg login "$1" --arg state "$2" '{user: {username: $login}, state: $state}'; }
+
+gl_old=$(gl_discussion thread "$(gl_note 101 markeli 'Old thread' 2026-11-14T08:00:00.000Z)" \
+	"$(gl_note 102 markeli-agent 'Fixed.' 2026-11-14T09:30:00.000Z)")
+
+begin gl_new_items
+gl_answer 1 discussions="[$gl_old]"
+gl_answer 2 discussions="[$(gl_discussion thread "$(gl_note 101 markeli 'Old thread' 2026-11-14T08:00:00.000Z)" \
+		"$(gl_note 102 markeli-agent 'Fixed.' 2026-11-14T09:30:00.000Z)" \
+		"$(gl_note 103 markeli 'Not quite' 2026-11-14T11:02:00.000Z)"),
+	$(gl_discussion individual "$(gl_note 104 markeli 'General remark' 2026-11-14T11:00:00.000Z)"),
+	$(gl_discussion thread "$(gl_note 105 markeli 'New thread' 2026-11-14T11:01:00.000Z)"),
+	$(gl_discussion individual "$(gl_note 106 stranger 'Hi' 2026-11-14T11:03:00.000Z)")]"
+watch_once "$gl_url"
+expect_no_out
+watch_once "$gl_url"
+expect_status 0
+expect_out \
+	"watch-pr $glref comment markeli $gl_mr_url#note_104 General remark" \
+	"watch-pr $glref thread markeli $gl_mr_url#note_105 New thread" \
+	"watch-pr $glref reply markeli $gl_mr_url#note_103 Not quite"
+watch_once "$gl_url"
+expect_no_out
+
+begin gl_reviewer_state
+gl_answer 1 reviewers="[$(gl_reviewer markeli unreviewed),$(gl_reviewer stranger unreviewed)]"
+gl_answer 2 reviewers="[$(gl_reviewer markeli requested_changes),$(gl_reviewer stranger approved)]"
+gl_answer 4 reviewers="[$(gl_reviewer markeli approved),$(gl_reviewer stranger approved)]"
+watch_once "$gl_url"
+watch_once "$gl_url"
+expect_out "watch-pr $glref review markeli $gl_mr_url requested_changes"
+watch_once "$gl_url"
+expect_no_out
+watch_once "$gl_url"
+expect_out "watch-pr $glref review markeli $gl_mr_url approved"
+
+begin gl_system_notes_ignored
+gl_answer 1
+gl_answer 2 discussions="[$(gl_discussion individual \
+	"$(gl_note 107 markeli 'added 1 commit' 2026-11-14T11:00:00.000Z system)")]"
+watch_once "$gl_url"
+watch_once "$gl_url"
+expect_no_out
+
+begin gl_pipeline_failed
+gl_answer 1
+gl_answer 2 pipeline='{"id": 77, "status": "failed", "web_url": "https://gitlab.com/g/sub/proj/-/pipelines/77"}'
+answer_json gitlab-jobs 1 '[{"name": "test"}, {"name": "lint"}]'
+watch_once "$gl_url"
+watch_once "$gl_url"
+expect_out "watch-pr $glref ci-failed - https://gitlab.com/g/sub/proj/-/pipelines/77 test,lint"
+watch_once "$gl_url"
+expect_no_out
+expect_in "$FIXTURE/calls" 'pipelines/77/jobs'
+
+begin gl_catch_up
+gl_answer 1 discussions="[$gl_old,
+	$(gl_discussion individual "$(gl_note 108 markeli 'Before the push' 2026-11-14T09:45:00.000Z)"),
+	$(gl_discussion individual "$(gl_note 109 markeli 'After the push' 2026-11-14T10:30:00.000Z)")]"
+watch_once "$gl_url"
+expect_out "watch-pr $glref comment markeli $gl_mr_url#note_109 After the push"
+
+begin gl_merged
+gl_answer 1
+gl_answer 2 state=merged
+watch_once "$gl_url"
+watch "$gl_url"
+expect_status 0
+expect_out "watch-pr $glref merged - $gl_mr_url -"
+
+begin gl_fatal_404
+echo 1 >"$FIXTURE/gitlab-mr.exit"
+echo 'glab: 404 Not Found (HTTP 404)' >"$FIXTURE/gitlab-mr.stderr"
+watch "$gl_url"
+expect_status 1
+expect_out "watch-pr $glref error - - glab: 404 Not Found (HTTP 404)"
+
 if [ "$failures" -gt 0 ]; then
 	echo "$failures check(s) failed"
 	exit 1
