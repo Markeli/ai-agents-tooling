@@ -1,6 +1,16 @@
 # Shared helpers of the sandbox-image scripts; sourced, not executed.
 # shellcheck shell=bash
 
+# The image's build input and address (docs/adr/0004-build-the-sandbox-image-from-the-repository-skills-too.md): a
+# git tree of HEAD's sandbox/image as "image" and skills/claude-code as "skills", the latter empty when it is missing.
+# Runs in the repository; prints the tree hash.
+image_tree() {
+	local image_dir skills_dir
+	image_dir=$(git rev-parse HEAD:sandbox/image)
+	skills_dir=$(git rev-parse --verify --quiet HEAD:skills/claude-code) || skills_dir=$(git hash-object -t tree /dev/null)
+	printf '040000 tree %s\timage\n040000 tree %s\tskills\n' "$image_dir" "$skills_dir" | git mktree
+}
+
 # Reads a Keep a Changelog file. Sets:
 #   changelog_version     first "## [x.y.z] - yyyy-mm-dd" version, or 0.0.0 when there is none
 #   changelog_released    true when such a section exists

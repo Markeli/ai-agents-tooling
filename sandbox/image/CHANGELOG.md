@@ -4,6 +4,23 @@ All notable changes to the `ghcr.io/markeli/claude-sandbox` image. The format fo
 [Keep a Changelog](https://keepachangelog.com), and versions follow the image SemVer rules in
 [`sandbox/README.md`](../README.md#image-versioning): the first `## [x.y.z]` section is the image version.
 
+## [1.1.0] - 2026-11-14
+
+### Added
+
+- The `watch-pr` skill (`/watch-pr [<url>|<number>]`) and the `watch-pr` command: after opening a PR/MR, the bot
+  watches it until it is merged or closed and is woken, without spending tokens in between, by the allow-listed
+  authors' comments, threads, replies and reviews and by failed CI (GitHub and GitLab.com).
+- `/etc/claude-code/watch-pr/authors`: the allow-list, the owner and `markeli-agent` (for sessions in other roles)
+  on GitHub and GitLab.
+- Source control rules: watch every PR/MR right after opening it, and end every PR/MR comment with the session
+  marker.
+
+### Changed
+
+- The image is also built from the repository's `skills/claude-code`, whose skills ship in
+  `/etc/claude-code/.claude/skills/`; `TREE` in `image-release` is the tree of both directories (ADR 0004).
+
 ## [1.0.2] - 2026-11-13
 
 ### Changed

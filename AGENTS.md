@@ -4,12 +4,13 @@ Personal monorepo for AI agent tooling: skills, MCP servers, Claude plugins, sys
 
 ## Structure
 
-- `skills/` — Coding agent skills (Claude Code, Cursor, shared)
+- `skills/` — Coding agent skills (Claude Code, Cursor, shared); every skill in `skills/claude-code` ships in the
+  sandbox image (ADR 0004), so a change there needs an image CHANGELOG entry
 - `plugins/mcp-servers/` — MCP servers (prefer C# / .NET)
 - `plugins/claude-plugins/` — Claude-specific plugins
 - `prompts/system/` — System prompts for AI agents
 - `prompts/templates/` — Reusable prompt templates
-- `sandbox/` — Docker Sandbox (sbx) template image, v2 kit and launcher for the `markeli-agent` bot
+- `sandbox/` — Docker Sandbox (sbx) template image, v3 kit and launcher for the `markeli-agent` bot
 - `docs/specs/` — Specs (`YYYY-MM-DD-<slug>.md`), merged before their implementation
 - `docs/adr/` — Architecture decision records (`NNNN-<slug>.md`)
 - `docs/plans/` — Implementation plans and design docs
@@ -34,6 +35,8 @@ Personal monorepo for AI agent tooling: skills, MCP servers, Claude plugins, sys
 - sbx kits (`sandbox/kits/`): sbx reads a kit directory's descriptor only as `spec.yaml`, v3 descriptors included,
   not as `<name>.yaml` like the examples of the v3 spec. `sbx` isn't available in the agent sandbox: `make validate`
   and any sandbox creation run on the owner's host.
+- `watch-pr` skill (`skills/claude-code/watch-pr`): tests are `tests/run.sh` there (stub `gh`/`glab` answering from
+  numbered fixture files, `--once` runs; `WATCH_PR_POLLS`/`WATCH_PR_TRACE`/`WATCH_PR_SLEEP` are test hooks).
 - In the sandbox, shellcheck dies with `commitBuffer: invalid argument` on files with emoji unless the locale is
   UTF-8: run `LC_ALL=C.UTF-8 shellcheck -x ...`.
 - `renovate --platform=local --dry-run=extract` (via `npx --package renovate@<version> --`) only sees git-tracked

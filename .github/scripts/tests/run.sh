@@ -20,25 +20,36 @@ fail() {
 	failures=$((failures + 1))
 }
 
-# Starts a case: $1 name, $2 base CHANGELOG, $3 head CHANGELOG, $4 "image" to also change the Dockerfile in head
+# shellcheck source=../sandbox-image-lib.sh source-path=SCRIPTDIR
+. "$scripts/sandbox-image-lib.sh"
+
+# Starts a case: $1 name, $2 base CHANGELOG, $3 head CHANGELOG, $4 "image" to also change the Dockerfile in head,
+# "skill" to change a skill in skills/claude-code instead, "no-skills" for a repository without skills/claude-code
 begin() {
 	current=$1
 	export FIXTURE=$work/$current/fixture
 	repo=$work/$current/repo
 	mkdir -p "$FIXTURE" "$repo/sandbox/image"
+	if [ "${4:-}" != no-skills ]; then
+		mkdir -p "$repo/skills/claude-code/demo"
+		echo 'demo' >"$repo/skills/claude-code/demo/SKILL.md"
+	fi
 	git -C "$repo" init -q
 	git -C "$repo" config user.email test@example.com
 	git -C "$repo" config user.name test
 	printf '%s' "$2" >"$repo/sandbox/image/CHANGELOG.md"
 	echo 'FROM scratch' >"$repo/sandbox/image/Dockerfile"
 	git -C "$repo" add -A && git -C "$repo" commit -q -m base
+	base_tree=$(cd "$repo" && image_tree)
 	printf '%s' "$3" >"$repo/sandbox/image/CHANGELOG.md"
 	if [ "${4:-}" = image ]; then
 		echo 'LABEL changed=true' >>"$repo/sandbox/image/Dockerfile"
+	elif [ "${4:-}" = skill ]; then
+		echo 'changed' >>"$repo/skills/claude-code/demo/SKILL.md"
 	fi
 	echo change >"$repo/README.md"
 	git -C "$repo" add -A && git -C "$repo" commit -q -m change
-	tree=$(git -C "$repo" rev-parse HEAD:sandbox/image)
+	tree=$(cd "$repo" && image_tree)
 	tree_tag=$image:tree-$tree
 }
 
@@ -122,8 +133,25 @@ registry 1.2.0 sha256:old 1.2.0
 plan pull_request main
 expect_status 0
 expect version "1.2.0+unreleased.${tree:0:12}"
-expect_in "$work/$current/release-check.md" '⚠️ `sandbox/image` changed without a CHANGELOG entry'
+expect_in "$work/$current/release-check.md" '⚠️ The image (`sandbox/image`, `skills/claude-code`) changed without a CHANGELOG entry'
 expect_in "$work/$current/log" '::warning file=sandbox/image/Dockerfile,title=No CHANGELOG entry'
+
+begin pr-skill-change "$(released 1.2.0)" "$(released 1.2.0)" skill
+registry 1.2.0 sha256:old 1.2.0
+plan pull_request main
+expect_status 0
+expect changed true
+expect tree "$tree"
+[ "$tree" != "$base_tree" ] || fail "a skill change keeps the image tree $tree"
+[ "$tree" != "$(git -C "$repo" rev-parse HEAD:sandbox/image)" ] || fail "the tree covers sandbox/image only"
+expect_in "$work/$current/release-check.md" '⚠️ The image (`sandbox/image`, `skills/claude-code`) changed without a CHANGELOG entry'
+expect_in "$work/$current/log" '::warning file=skills/claude-code/demo/SKILL.md,title=No CHANGELOG entry'
+
+begin tree-without-skills "$(released 1.2.0)" "$(released 1.2.0)" no-skills
+plan pull_request main
+expect_status 0
+expect tree "$tree"
+expect changed false
 
 begin pr-release "$(unreleased 1.2.0 'New tool.')" "$(released 1.3.0)"
 registry 1.2.0 sha256:old 1.2.0
@@ -386,7 +414,7 @@ expect_in "$work/$current/diff.md" 'No toolchain changes since 1.2.0.'
 diff_case diff-empty-old '' 'a\t1\n'
 expect_in "$work/$current/diff.md" '| a | — | 1 |'
 
-current=diff-no-previous
+current="diff-no-previous"
 mkdir -p "$work/$current"
 printf 'a\t1\n' >"$work/$current/new.tsv"
 "$scripts/sandbox-image-inventory-diff.sh" - "$work/$current/new.tsv" "" 1.0.0 >"$work/$current/diff.md"

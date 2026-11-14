@@ -122,6 +122,25 @@ Network: no extra allow rules. `PLANNOTATOR_SHARE=disabled` turns off share link
 from the host, not from the sandbox. URL annotation tries `r.jina.ai` first and fetches the page directly when that
 is blocked; both go through the sandbox network policy.
 
+## Watching PRs/MRs
+
+After opening a PR/MR the bot runs the `/watch-pr` skill (`skills/claude-code/watch-pr`, spec
+[`2026-11-14-watch-pr.md`](../docs/specs/2026-11-14-watch-pr.md)): the `watch-pr` script polls it every 30 seconds
+as a Claude Code `Monitor`, and the bot is woken only by a line for a new comment, thread, reply or review of an
+allow-listed author, a failed check, or the merge or close that ends the watch. It fixes, pushes and replies in the
+thread, and also writes to the terminal when it disagrees or doesn't understand.
+
+- The allow-list is `sandbox/image/watch-pr/authors` (in the image: `/etc/claude-code/watch-pr/authors`): the owner
+  and `markeli-agent`, for sessions in other roles such as a reviewer. Every comment the bot posts ends with a hidden
+  `<!-- watch-pr session=<id> -->`, and only another session's marker wakes it. Add a bot such as
+  `github.com copilot-pull-request-reviewer[bot]` the same way.
+- After a sandbox restart, resume with `/watch-pr` on the branch (or `/watch-pr <url>`): the first poll reports what
+  came in meanwhile.
+- All sandboxes share the bot's GitHub token: a watcher costs about 120 GraphQL points an hour, and all of them slow
+  down to one poll in 5 minutes when less than 20% of the budget is left.
+- Tests: `skills/claude-code/watch-pr/tests/run.sh` (stub `gh`/`glab`), run by the `lint` job of
+  `sandbox-image.yml`.
+
 ## Status line
 
 `image/statusline.sh` is copied to `/etc/claude-code/statusline.sh` and wired up via `statusLine` in
@@ -272,8 +291,18 @@ is in [the spec](../docs/specs/2026-10-23-sandbox-image-versioning.md) and ADRs
 | `x.y.z` | A release; immutable, CI never writes an existing one |
 | `x.y`, `x` | The highest release of that minor or major line |
 | `latest` | The highest release from `main` (maintenance releases never move it); the launcher's default |
-| `tree-<hash>` | One build per git tree of `sandbox/image`, never rebuilt; internal, deleted after 30 days unless released |
+| `tree-<hash>` | One build per image tree (below), never rebuilt; internal, deleted after 30 days unless released |
 | `sha-<short>` | Legacy: no longer published; existing tags stay |
+
+The image is built from `sandbox/image` and, as a second build context named `skills`, from `skills/claude-code`:
+every skill there ships in `/etc/claude-code/.claude/skills/`
+([ADR 0004](../docs/adr/0004-build-the-sandbox-image-from-the-repository-skills-too.md)). The image tree is a git
+tree of both, so a change to either is a new image:
+
+```bash
+printf '040000 tree %s\timage\n040000 tree %s\tskills\n' \
+  "$(git rev-parse HEAD:sandbox/image)" "$(git rev-parse HEAD:skills/claude-code)" | git mktree
+```
 
 ### SemVer for the image
 
@@ -287,8 +316,9 @@ is in [the spec](../docs/specs/2026-10-23-sandbox-image-versioning.md) and ADRs
 
 ### Releasing
 
-1. Every PR that changes `sandbox/image` adds its entry under `## [Unreleased]` (`### Added`, `### Changed`,
-   `### Removed`, `### Fixed`, `### Security`). CI, tests and internal refactoring need none.
+1. Every PR that changes `sandbox/image` or `skills/claude-code` adds its entry under `## [Unreleased]`
+   (`### Added`, `### Changed`, `### Removed`, `### Fixed`, `### Security`). CI, tests and internal refactoring need
+   none.
 2. To release, open a PR that turns `## [Unreleased]` into `## [x.y.z] - yyyy-mm-dd`, with the bump chosen from the
    entries by the rules above, and a summary of the Renovate updates merged since the last release.
 3. The merge publishes it: CI points `x.y.z`, `x.y`, `x` and `latest` at the `tree-<hash>` image the PR built, and
@@ -315,7 +345,7 @@ a tree is built.
 ### Inside a sandbox
 
 `/etc/claude-code/image-release` holds `VERSION` (`x.y.z`, or `<x.y.z>+unreleased.<tree>` for a build of unreleased
-changes), `TREE` (the `sandbox/image` tree hash) and `REVISION` (the commit the tree was built from: the PR head for
+changes), `TREE` (the image tree hash) and `REVISION` (the commit the tree was built from: the PR head for
 images built by a PR, which a merge retags without rebuilding, so it can differ from the `main` commit; the git tag
 `claude-sandbox.v<x.y.z>` points at that one). The OCI labels `org.opencontainers.image.version`, `revision` and
 `created` carry the same. `/etc/claude-code/inventory.sh` lists the toolchain as built. Claude Code and its plugins
