@@ -1,0 +1,282 @@
+#!/usr/bin/env bash
+# Watches one GitHub PR or GitLab.com MR and prints one line per new event: the allow-listed authors' comments,
+# threads, replies and reviews, failed checks, and the merge or close that ends the watch
+# (docs/specs/2026-11-14-watch-pr.md). Meant to run as a Claude Code Monitor: each stdout line wakes the agent, so
+# only event lines go to stdout and diagnostics go to stderr.
+#
+# Usage: watch-pr [<url>|<number>] [--interval <seconds>] [--authors <file>] [--session <id>] [--state-dir <dir>]
+#                 [--max-runtime <seconds>] [--once]
+# Exit: 0 merged or closed (or --once), 1 fatal API error, 2 usage or environment error, 3 --max-runtime reached.
+#
+# Test-only environment: WATCH_PR_SLEEP replaces the sleep command, WATCH_PR_POLLS exits 3 after that many polls,
+# WATCH_PR_TRACE names a file that gets a "sleep <seconds>" line per pause.
+set -uo pipefail
+
+self=$(readlink -f "${BASH_SOURCE[0]}")
+self_dir=$(dirname "$self")
+# shellcheck source=github.sh source-path=SCRIPTDIR
+. "$self_dir/github.sh"
+# shellcheck source=gitlab.sh source-path=SCRIPTDIR
+. "$self_dir/gitlab.sh"
+
+interval=30
+max_runtime=1500
+once=false
+authors_file=/etc/claude-code/watch-pr/authors
+session=${CLAUDE_CODE_SESSION_ID:-}
+state_root=${XDG_STATE_HOME:-$HOME/.local/state}/watch-pr
+target=""
+
+die_usage() {
+	echo "watch-pr: $*" >&2
+	exit 2
+}
+
+# Checks that option $1 has a value $2 of whole seconds
+seconds() {
+	[[ ${2:-} =~ ^[0-9]+$ ]] || die_usage "$1 needs a number of seconds, got '${2:-}'"
+}
+
+while [ $# -gt 0 ]; do
+	case $1 in
+	--interval)
+		seconds "$1" "${2:-}"
+		interval=$2
+		shift 2
+		;;
+	--max-runtime)
+		seconds "$1" "${2:-}"
+		max_runtime=$2
+		shift 2
+		;;
+	--authors)
+		[ -n "${2:-}" ] || die_usage "--authors needs a file"
+		authors_file=$2
+		shift 2
+		;;
+	--session)
+		[ -n "${2:-}" ] || die_usage "--session needs an id"
+		session=$2
+		shift 2
+		;;
+	--state-dir)
+		[ -n "${2:-}" ] || die_usage "--state-dir needs a directory"
+		state_root=$2
+		shift 2
+		;;
+	--once)
+		once=true
+		shift
+		;;
+	-h | --help)
+		sed -n '2,10s/^# \{0,1\}//p' "$self"
+		exit 0
+		;;
+	-*) die_usage "unknown option $1" ;;
+	*)
+		[ -z "$target" ] || die_usage "more than one PR/MR given: $target, $1"
+		target=$1
+		shift
+		;;
+	esac
+done
+
+[ -n "$session" ] || die_usage "no session: pass --session or run in Claude Code, which sets CLAUDE_CODE_SESSION_ID"
+[[ $session =~ ^[A-Za-z0-9._-]+$ ]] || die_usage "invalid session id '$session'"
+
+# Sets host and project from the origin remote of the repository in the current directory
+from_origin() {
+	local url
+	url=$(git remote get-url origin 2>/dev/null) ||
+		die_usage "not in a git repository with an origin remote: pass a PR/MR URL"
+	if [[ $url =~ ^(ssh://)?[^@/]+@([^:/]+)[:/](.+)$ ]]; then
+		host=${BASH_REMATCH[2]}
+		project=${BASH_REMATCH[3]}
+	elif [[ $url =~ ^https?://([^/@]+@)?([^/]+)/(.+)$ ]]; then
+		host=${BASH_REMATCH[2]}
+		project=${BASH_REMATCH[3]}
+	else
+		die_usage "can't read the host of origin '$url': pass a PR/MR URL"
+	fi
+	project=${project%/}
+	project=${project%.git}
+}
+
+host=""
+project=""
+number=""
+if [[ $target =~ ^https://github\.com/([^/]+/[^/]+)/pull/([0-9]+)(/.*)?$ ]]; then
+	host=github.com
+	project=${BASH_REMATCH[1]}
+	number=${BASH_REMATCH[2]}
+elif [[ $target =~ ^https://gitlab\.com/(.+)/-/merge_requests/([0-9]+)(/.*)?$ ]]; then
+	host=gitlab.com
+	project=${BASH_REMATCH[1]}
+	number=${BASH_REMATCH[2]}
+elif [[ $target =~ ^https?://([^/]+) ]]; then
+	die_usage "unsupported host ${BASH_REMATCH[1]}: only github.com and gitlab.com"
+elif [[ $target =~ ^[0-9]+$ ]]; then
+	from_origin
+	number=$target
+elif [ -z "$target" ]; then
+	from_origin
+else
+	die_usage "not a PR/MR URL or number: $target"
+fi
+
+# Owners, groups and names: letters, digits, ".", "_", "-", separated by "/" (GitHub: exactly owner/name)
+if [ "$host" = github.com ]; then
+	[[ $project =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || die_usage "not a GitHub owner/repository: $project"
+else
+	[[ $project =~ ^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)+$ ]] || die_usage "not a GitLab project path: $project"
+fi
+
+case $host in
+github.com) tool=gh ;;
+gitlab.com) tool=glab ;;
+*) die_usage "unsupported host $host: only github.com and gitlab.com" ;;
+esac
+for command in "$tool" jq flock git; do
+	command -v "$command" >/dev/null || die_usage "$command is required"
+done
+
+if [ -z "$number" ]; then
+	if [ "$tool" = gh ]; then
+		number=$(gh pr view --json number --jq .number 2>/dev/null)
+	else
+		number=$(glab mr view -F json 2>/dev/null | jq -r '.iid // empty')
+	fi
+	[[ $number =~ ^[0-9]+$ ]] || die_usage "no open PR/MR for the current branch: pass a PR/MR URL or number"
+fi
+
+if [ "$host" = github.com ]; then
+	ref="$project#$number"
+else
+	ref="$project!$number"
+fi
+
+[ -r "$authors_file" ] || die_usage "can't read the allow-list $authors_file"
+authors=$(awk -v host="$host" '!/^[[:space:]]*#/ && tolower($1) == host && NF >= 2 { print tolower($2) }' "$authors_file")
+[ -n "$authors" ] || die_usage "no allow-listed authors for $host in $authors_file"
+
+# One poll: prints the normalized snapshot (github.sh), returns 0, 1 (transient) or 2 (fatal, reason on stderr)
+poll() {
+	if [ "$host" = github.com ]; then
+		github_snapshot "$project" "$number"
+	else
+		gitlab_snapshot "$project" "$number"
+	fi
+}
+
+state_file=$state_root/$session/$host/$project/$number.json
+mkdir -p "$(dirname "$state_file")" || die_usage "can't create the state directory for $state_file"
+# One watcher per PR/MR and session; the kernel drops the lock with the process, so a crash leaves none behind
+exec 9>"$state_file.lock"
+flock -n 9 || die_usage "$ref is already watched in this session (lock $state_file.lock)"
+# Sessions idle for 30 days are gone; this one's mtime marks it as used. Only directories with the .watch-pr mark
+# are sessions, so a --state-dir pointing elsewhere loses nothing.
+find "$state_root" -mindepth 1 -maxdepth 1 -type d -mtime +30 ! -name "$session" \
+	-exec sh -c '[ -e "$1/.watch-pr" ] && rm -rf "$1"' sh {} \;
+touch "$state_root/$session/.watch-pr" "$state_root/$session"
+echo "watch-pr: watching $ref every ${interval}s, state in $state_file" >&2
+
+bot_login=markeli-agent
+
+# Reports the events of the snapshot in $1 and saves the next state. Returns 10 when the PR/MR has ended.
+report() {
+	local previous=/dev/null result
+	[ ! -s "$state_file" ] || previous=$state_file
+	# Files, not arguments: a snapshot with long comments outgrows the argument size limit
+	result=$(jq -n -f "$self_dir/events.jq" --slurpfile snaps "$1" --slurpfile states "$previous" \
+		--arg authors "$authors" --arg me "$bot_login" --arg session "$session" --arg ref "$ref") || {
+		echo "watch-pr: can't diff the snapshot of $ref" >&2
+		return 1
+	}
+	jq -r '.lines[]' <<<"$result"
+	if [ "$(jq -r .ended <<<"$result")" = true ]; then
+		rm -f "$state_file"
+		return 10
+	fi
+	jq .state <<<"$result" >"$state_file.tmp" && mv "$state_file.tmp" "$state_file"
+}
+
+# The pause before the next poll: the interval, or 300 s while less than 20% of GitHub's budget is left (all the
+# bot's sandboxes share it) and it hasn't been reset yet. Sets pause, in the main shell so that slow carries over.
+slow=false
+next_interval() {
+	local remaining limit reset
+	read -r remaining limit reset < <(jq -r '.rate // {} | "\(.remaining // "") \(.limit // "") \(.reset // "")"' \
+		"$snapshot_file" 2>/dev/null)
+	if [[ $remaining =~ ^[0-9]+$ && $limit =~ ^[0-9]+$ ]] && ((remaining * 5 < limit)) &&
+		(($(date -d "$reset" +%s 2>/dev/null || echo 0) > $(date +%s))); then
+		$slow || echo "watch-pr: $remaining of $limit GitHub points left, polling every 300s until $reset" >&2
+		slow=true
+		pause=$((interval > 300 ? interval : 300))
+		return
+	fi
+	slow=false
+	pause=$interval
+}
+
+# The last line of a poll's stderr, printable and short, as the reason of a warning or error line
+reason() {
+	grep -v '^[[:space:]]*$' "$error_file" | tail -n 1 | tr -c '[:print:]\n' ' ' | cut -c1-200
+}
+
+# poll_file gets each poll's answer; snapshot_file keeps the last good one, whose rate limit sets the pause
+poll_file=$(mktemp)
+snapshot_file=$(mktemp)
+error_file=$(mktemp)
+trap 'rm -f "$poll_file" "$snapshot_file" "$error_file"' EXIT
+
+failed_polls=0
+warned=false
+# A failed poll or diff: warns once after 10 in a row
+count_failure() {
+	cat "$error_file" >&2
+	failed_polls=$((failed_polls + 1))
+	if ((failed_polls >= 10)) && ! $warned; then
+		echo "watch-pr $ref warning - - $(reason)"
+		warned=true
+	fi
+}
+
+polls=0
+# fd 9 holds the lock: closed for the loop, so no child (gh, jq, sleep) inherits it and keeps the lock after this
+# shell is killed. Bash keeps its own copy, close-on-exec, for the loop's duration.
+while :; do
+	polls=$((polls + 1))
+	poll >"$poll_file" 2>"$error_file"
+	case $? in
+	0)
+		cp "$poll_file" "$snapshot_file"
+		report "$snapshot_file" 2>"$error_file"
+		case $? in
+		0)
+			failed_polls=0
+			warned=false
+			;;
+		10) exit 0 ;;
+		*) count_failure ;;
+		esac
+		;;
+	2)
+		echo "watch-pr $ref error - - $(reason)"
+		exit 1
+		;;
+	*) count_failure ;;
+	esac
+	if $once; then
+		exit 0
+	fi
+	if [ -n "${WATCH_PR_POLLS:-}" ] && ((polls >= WATCH_PR_POLLS)); then
+		exit 3
+	fi
+	next_interval
+	# Ends before the Monitor that runs it expires: the agent restarts it on exit 3
+	if ((SECONDS + pause >= max_runtime)); then
+		exit 3
+	fi
+	[ -z "${WATCH_PR_TRACE:-}" ] || echo "sleep $pause" >>"$WATCH_PR_TRACE"
+	"${WATCH_PR_SLEEP:-sleep}" "$pause"
+done 9>&-

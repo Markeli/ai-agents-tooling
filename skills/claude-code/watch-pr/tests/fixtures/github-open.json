@@ -1,0 +1,5 @@
+{"data": {"rateLimit": {"limit": 5000, "remaining": 4990, "resetAt": "2099-01-01T00:00:00Z"},
+ "repository": {"pullRequest": {"url": "https://github.com/Markeli/demo/pull/7", "state": "OPEN",
+  "comments": {"nodes": []}, "reviewThreads": {"nodes": []}, "reviews": {"nodes": []},
+  "commits": {"nodes": [{"commit": {"oid": "a1", "committedDate": "2026-11-14T10:00:00Z",
+   "statusCheckRollup": {"contexts": {"nodes": []}}}}]}}}}}

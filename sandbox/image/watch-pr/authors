@@ -1,0 +1,8 @@
+# Authors whose comments and reviews wake the bot through the watch-pr skill: <host> <login> per line,
+# case-insensitive. People and bots alike (a GitHub App comments as <app>[bot]). markeli-agent is here for sessions in
+# other roles, such as a reviewer: only a comment with another session's marker wakes a session, never its own or an
+# unmarked one (docs/specs/2026-11-14-watch-pr.md).
+github.com Markeli
+gitlab.com markeli
+github.com markeli-agent
+gitlab.com markeli-agent

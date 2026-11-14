@@ -40,6 +40,10 @@ BREAKING CHANGE: <what breaks and how to migrate>
   `glab mr create --assignee markeli-agent --reviewer markeli ...`. If either can't be set, say so instead of
   dropping it silently.
 - Reply to review comments in their threads; push fixes as new commits.
+- Right after opening a PR/MR, watch it with the `/watch-pr` skill until it is merged or closed: it wakes you on the
+  owner's comments, replies, reviews and failed CI.
+- End every comment, reply and review body you post on a PR/MR with the line
+  `<!-- watch-pr session=<$CLAUDE_CODE_SESSION_ID> -->` (the skill explains why).
 
 ## CI workflows
 

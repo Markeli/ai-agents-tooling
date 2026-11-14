@@ -193,6 +193,12 @@ RUN for skill in grill-me grilling; do \
 		> /etc/claude-code/skill-sources.tsv \
 	&& chmod -R a+rX /etc/claude-code
 
+# The repository's own skills, from the "skills" build context: skills/claude-code (docs/adr/0004). A named build
+# context, not a stage, so hadolint can't see it
+# hadolint ignore=DL3022
+COPY --from=skills . /etc/claude-code/.claude/skills/
+RUN ln -s /etc/claude-code/.claude/skills/watch-pr/watch-pr /usr/local/bin/watch-pr
+
 # "agent" is the base image's fixed non-root account, not a numeric id
 # hadolint ignore=DL3066
 USER agent
@@ -244,6 +250,7 @@ COPY rules/ /etc/claude-code/rules/
 COPY templates/ /etc/claude-code/templates/
 COPY statusline.sh /etc/claude-code/statusline.sh
 COPY inventory.sh /etc/claude-code/inventory.sh
+COPY watch-pr/ /etc/claude-code/watch-pr/
 
 # Image identity, set by CI (see .github/scripts/sandbox-image-plan.sh) and read by the bot and agent-sandbox.
 # Declared last so a new version rebuilds only this layer.

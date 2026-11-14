@@ -8,12 +8,14 @@ on:
     branches: [main, "release/*"]
     paths:
       - sandbox/image/**
+      - skills/claude-code/**
       - .github/workflows/sandbox-image.yml
       - .github/scripts/**
       - renovate.json
   pull_request:
     paths:
       - sandbox/image/**
+      - skills/claude-code/**
       - .github/workflows/sandbox-image.yml
       - .github/scripts/**
       - renovate.json
@@ -46,8 +48,15 @@ jobs:
       - name: Test the workflow scripts
         run: .github/scripts/tests/run.sh
 
+      - name: Test the watch-pr skill
+        run: skills/claude-code/watch-pr/tests/run.sh
+
       - name: shellcheck
-        run: shellcheck -x .github/scripts/*.sh .github/scripts/tests/run.sh .github/scripts/tests/stubs/* sandbox/image/*.sh sandbox/image/git-hooks/*
+        run: >-
+          shellcheck -x .github/scripts/*.sh .github/scripts/tests/run.sh .github/scripts/tests/stubs/*
+          sandbox/image/*.sh sandbox/image/git-hooks/*
+          skills/claude-code/watch-pr/watch-pr skills/claude-code/watch-pr/*.sh
+          skills/claude-code/watch-pr/tests/run.sh skills/claude-code/watch-pr/tests/stubs/*
 
       - name: actionlint
         uses: docker://rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
@@ -118,6 +127,8 @@ jobs:
         if: steps.plan.outputs.build == 'true'
         with:
           context: sandbox/image
+          # Every skill in skills/claude-code ships in the image (docs/adr/0004)
+          build-contexts: skills=skills/claude-code
           platforms: linux/arm64
           push: ${{ steps.plan.outputs.push == 'true' }}
           load: true

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Decides what the sandbox-image workflow does with this run (docs/specs/2026-10-23-sandbox-image-versioning.md).
-# The image is content-addressed by the git tree of sandbox/image (tag tree-<hash>), built once and never overwritten.
+# The image is content-addressed by a git tree of sandbox/image and skills/claude-code (tag tree-<hash>, image_tree,
+# ADR 0004), built once and never overwritten.
 # The release version is the first "## [x.y.z]" section of sandbox/image/CHANGELOG.md; a push to main or
 # release/<major>.x publishes it once, by pointing x.y.z and the moving tags at the tree image.
 #
@@ -10,14 +11,14 @@
 # Output (GITHUB_OUTPUT, or stdout when unset):
 #   build          whether tree_tag is missing and must be built
 #   push           whether the build pushes (false only for fork PRs, which have no registry access)
-#   tree, tree_tag the git tree hash of sandbox/image and <image>:tree-<hash>
+#   tree, tree_tag the image tree hash (image_tree) and <image>:tree-<hash>
 #   version        version baked into the image: x.y.z, or <x.y.z>+unreleased.<tree12>
 #   revision       commit the tree is built from: the PR head for PRs, the pushed commit otherwise
 #   publish        whether this push publishes (or completes the publish of) release
 #   release        the release version x.y.z, empty unless publish
 #   publish_tags   newline-separated tags to point at tree_tag
 #   latest         whether the GitHub release is marked Latest (pushes to the default branch)
-#   changed        whether a PR changes sandbox/image (release_check is written for PRs only)
+#   changed        whether a PR changes sandbox/image or skills/claude-code (release_check is written for PRs only)
 #   release_check  path of the release-check Markdown
 set -euo pipefail
 
@@ -26,7 +27,7 @@ set -euo pipefail
 
 changelog=sandbox/image/CHANGELOG.md
 repo=${IMAGE,,}
-tree=$(git rev-parse HEAD:sandbox/image)
+tree=$(image_tree)
 tree_tag=$repo:tree-$tree
 release_check=${RELEASE_CHECK:-release-check.md}
 
@@ -88,7 +89,7 @@ if $publish_branch && $changelog_released; then
 	elif $published && ! $same_tree; then
 		notes+=("$release is already published from another tree; the changes of this tree are unreleased.")
 		if ! $changelog_unreleased; then
-			echo "::warning title=Unreleased image changes::sandbox/image changed after $release without an Unreleased entry in $changelog"
+			echo "::warning title=Unreleased image changes::the image changed after $release without an Unreleased entry in $changelog"
 		fi
 	else
 		publish=true
@@ -115,7 +116,7 @@ fi
 
 changed=false
 if [ "$EVENT" = pull_request ]; then
-	changed_files=$(git diff --name-only HEAD^1 HEAD -- sandbox/image)
+	changed_files=$(git diff --name-only HEAD^1 HEAD -- sandbox/image skills/claude-code)
 	changelog_changed=false
 	if grep -qx "$changelog" <<<"$changed_files"; then
 		changelog_changed=true
@@ -129,9 +130,9 @@ if [ "$EVENT" = pull_request ]; then
 	elif $changed && $changelog_changed && $changelog_unreleased; then
 		state="📝 The image changes, and the change is under \`## [Unreleased]\`: released later."
 	elif $changed && ! $changelog_changed; then
-		state="⚠️ \`sandbox/image\` changed without a CHANGELOG entry. Add it under \`## [Unreleased]\` of \`$changelog\`, or a \`## [x.y.z] - yyyy-mm-dd\` section to release it. CI, tests and internal refactoring need no entry."
+		state="⚠️ The image (\`sandbox/image\`, \`skills/claude-code\`) changed without a CHANGELOG entry. Add it under \`## [Unreleased]\` of \`$changelog\`, or a \`## [x.y.z] - yyyy-mm-dd\` section to release it. CI, tests and internal refactoring need no entry."
 		first=$(head -n 1 <<<"$changed_files")
-		echo "::warning file=$first,title=No CHANGELOG entry::sandbox/image changed without an entry in $changelog"
+		echo "::warning file=$first,title=No CHANGELOG entry::the image changed without an entry in $changelog"
 	elif $changed; then
 		state="📝 The image changes; nothing will be released."
 	else
