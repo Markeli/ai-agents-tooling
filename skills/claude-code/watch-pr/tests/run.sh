@@ -39,7 +39,8 @@ answer_json() { printf '%s\n' "$3" >"$FIXTURE/$1.$2"; }
 watch() {
 	(
 		cd "$case_dir/cwd" || exit 1
-		export PATH="$tests_dir/stubs:$PATH" WATCH_PR_SLEEP=true
+		export PATH="$tests_dir/stubs:$PATH" WATCH_PR_SLEEP=true WATCH_PR_POLLS=${WATCH_PR_POLLS:-} \
+			WATCH_PR_TRACE=${WATCH_PR_TRACE:-}
 		unset CLAUDE_CODE_SESSION_ID
 		timeout 30 "$script" --state-dir "$case_dir/state" --authors "$case_dir/authors" --session "$session" "$@"
 	) >"$case_dir/out" 2>"$case_dir/err"
@@ -411,6 +412,52 @@ gh_answer 2 comments="[$(gh_comment 85 Markeli 'Seen in the loop' 2026-11-14T11:
 watch "$gh_url" --interval 1 --max-runtime 2
 expect_status 3
 expect_out "watch-pr $ref comment Markeli https://github.com/Markeli/demo/pull/7#c85 Seen in the loop"
+
+# --- failures and rate limits ---
+
+# Makes the n-th GraphQL call fail: $1 n, $2 stderr
+gh_fail() {
+	echo 1 >"$FIXTURE/graphql.$1.exit"
+	printf '%s\n' "$2" >"$FIXTURE/graphql.$1.stderr"
+}
+
+begin transient_then_warning
+gh_fail 1 'Post "https://api.github.com/graphql": read: connection reset by peer'
+gh_answer 11
+gh_fail 12 'HTTP 502: Bad Gateway'
+gh_answer 22
+WATCH_PR_POLLS=22 watch "$gh_url"
+expect_status 3
+expect_out \
+	"watch-pr $ref warning - - Post \"https://api.github.com/graphql\": read: connection reset by peer" \
+	"watch-pr $ref warning - - HTTP 502: Bad Gateway"
+
+begin fatal_401
+gh_fail 1 'HTTP 401: Bad credentials (https://api.github.com/graphql)'
+watch "$gh_url"
+expect_status 1
+expect_out "watch-pr $ref error - - HTTP 401: Bad credentials (https://api.github.com/graphql)"
+
+begin fatal_not_found
+gh_fail 1 'GraphQL: Could not resolve to a PullRequest with the number of 7. (repository.pullRequest)'
+watch "$gh_url"
+expect_status 1
+expect_in "$case_dir/out" "watch-pr $ref error - - GraphQL: Could not resolve to a PullRequest"
+
+begin rate_limit_403_is_transient
+gh_fail 1 'HTTP 403: API rate limit exceeded for user ID 1. (https://api.github.com/graphql)'
+WATCH_PR_POLLS=2 watch "$gh_url"
+expect_status 3
+expect_no_out
+
+begin slow_down_below_20_percent
+gh_answer 1 remaining=900
+gh_answer 3 remaining=4000
+WATCH_PR_POLLS=4 WATCH_PR_TRACE=$case_dir/trace watch "$gh_url"
+expect_status 3
+[ "$(tr '\n' ' ' <"$case_dir/trace")" = "sleep 300 sleep 300 sleep 30 " ] ||
+	fail "sleeps: $(tr '\n' ' ' <"$case_dir/trace")"
+[ "$(grep -c 'polling every 300s' "$case_dir/err")" = 1 ] || fail "slow-down notes: $(cat "$case_dir/err")"
 
 if [ "$failures" -gt 0 ]; then
 	echo "$failures check(s) failed"

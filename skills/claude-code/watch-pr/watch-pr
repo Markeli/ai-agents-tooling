@@ -8,7 +8,8 @@
 #                 [--max-runtime <seconds>] [--once]
 # Exit: 0 merged or closed (or --once), 1 fatal API error, 2 usage or environment error, 3 --max-runtime reached.
 #
-# Test-only environment: WATCH_PR_SLEEP replaces the sleep command.
+# Test-only environment: WATCH_PR_SLEEP replaces the sleep command, WATCH_PR_POLLS exits 3 after that many polls,
+# WATCH_PR_TRACE names a file that gets a "sleep <seconds>" line per pause.
 set -uo pipefail
 
 self=$(readlink -f "${BASH_SOURCE[0]}")
@@ -197,20 +198,73 @@ report() {
 	jq .state <<<"$result" >"$state_file.tmp" && mv "$state_file.tmp" "$state_file"
 }
 
-snapshot_file=$(mktemp)
-trap 'rm -f "$snapshot_file"' EXIT
+# The pause before the next poll: the interval, or 300 s while less than 20% of GitHub's budget is left (all the
+# bot's sandboxes share it) and it hasn't been reset yet. Sets pause, in the main shell so that slow carries over.
+slow=false
+next_interval() {
+	local remaining limit reset
+	read -r remaining limit reset < <(jq -r '.rate // {} | "\(.remaining // "") \(.limit // "") \(.reset // "")"' \
+		"$snapshot_file" 2>/dev/null)
+	if [[ $remaining =~ ^[0-9]+$ && $limit =~ ^[0-9]+$ ]] && ((remaining * 5 < limit)) &&
+		(($(date -d "$reset" +%s 2>/dev/null || echo 0) > $(date +%s))); then
+		$slow || echo "watch-pr: $remaining of $limit GitHub points left, polling every 300s until $reset" >&2
+		slow=true
+		pause=$((interval > 300 ? interval : 300))
+		return
+	fi
+	slow=false
+	pause=$interval
+}
 
+# The last line of a poll's stderr, printable and short, as the reason of a warning or error line
+reason() {
+	grep -v '^[[:space:]]*$' "$error_file" | tail -n 1 | tr -c '[:print:]\n' ' ' | cut -c1-200
+}
+
+# poll_file gets each poll's answer; snapshot_file keeps the last good one, whose rate limit sets the pause
+poll_file=$(mktemp)
+snapshot_file=$(mktemp)
+error_file=$(mktemp)
+trap 'rm -f "$poll_file" "$snapshot_file" "$error_file"' EXIT
+
+failed_polls=0
+warned=false
+polls=0
 while :; do
-	if poll >"$snapshot_file"; then
+	polls=$((polls + 1))
+	poll >"$poll_file" 2>"$error_file"
+	case $? in
+	0)
+		cp "$poll_file" "$snapshot_file"
+		failed_polls=0
+		warned=false
 		report "$snapshot_file"
 		[ $? != 10 ] || exit 0
-	fi
+		;;
+	2)
+		echo "watch-pr $ref error - - $(reason)"
+		exit 1
+		;;
+	*)
+		cat "$error_file" >&2
+		failed_polls=$((failed_polls + 1))
+		if ((failed_polls >= 10)) && ! $warned; then
+			echo "watch-pr $ref warning - - $(reason)"
+			warned=true
+		fi
+		;;
+	esac
 	if $once; then
 		exit 0
 	fi
-	# Ends before the Monitor that runs it expires: the agent restarts it on exit 3
-	if ((SECONDS + interval >= max_runtime)); then
+	if [ -n "${WATCH_PR_POLLS:-}" ] && ((polls >= WATCH_PR_POLLS)); then
 		exit 3
 	fi
-	"${WATCH_PR_SLEEP:-sleep}" "$interval"
+	next_interval
+	# Ends before the Monitor that runs it expires: the agent restarts it on exit 3
+	if ((SECONDS + pause >= max_runtime)); then
+		exit 3
+	fi
+	[ -z "${WATCH_PR_TRACE:-}" ] || echo "sleep $pause" >>"$WATCH_PR_TRACE"
+	"${WATCH_PR_SLEEP:-sleep}" "$pause"
 done

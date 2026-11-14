@@ -4,14 +4,33 @@
 
 # Prints the snapshot of PR $2 of $1 (owner/repo). Returns 0, 1 (transient failure) or 2 (fatal), reason on stderr.
 github_snapshot() {
-	local project=$1 number=$2 response
+	local project=$1 number=$2 response status error_file error
+	error_file=$(mktemp)
 	# -f, not -F, for the strings: -F reads a file for a value starting with @
 	response=$(gh api graphql -f query="$github_query" -f owner="${project%%/*}" -f name="${project#*/}" \
-		-F number="$number") || return 1
-	jq -e "$github_normalize" <<<"$response" 2>/dev/null || {
-		echo "unexpected GraphQL answer: ${response:0:300}" >&2
+		-F number="$number" 2>"$error_file")
+	status=$?
+	error=$(cat "$error_file")
+	rm -f "$error_file"
+	if [ "$status" != 0 ]; then
+		printf '%s\n' "$error" >&2
+		github_fatal "$error" && return 2
 		return 1
-	}
+	fi
+	jq -e "$github_normalize" <<<"$response" 2>/dev/null && return 0
+	if jq -e '.data.repository.pullRequest == null or any(.errors[]?; .type == "NOT_FOUND")' <<<"$response" \
+		>/dev/null 2>&1; then
+		echo "the PR doesn't exist or the token can't see it" >&2
+		return 2
+	fi
+	echo "unexpected GraphQL answer: ${response:0:300}" >&2
+	return 1
+}
+
+# Whether gh's error $1 means the watch can't go on: bad credentials, no access, no such PR. Rate limits (also 403)
+# and everything else are transient.
+github_fatal() {
+	! grep -qiE 'rate limit|abuse|HTTP 429' <<<"$1" && grep -qE 'HTTP 40[134]|Could not resolve to' <<<"$1"
 }
 
 # The newest 100 of each kind are enough: fewer than 100 new ones arrive between two polls. The first comment of a
