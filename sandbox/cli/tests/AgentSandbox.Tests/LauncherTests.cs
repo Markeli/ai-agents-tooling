@@ -146,14 +146,18 @@ public sealed class LauncherTests
 	}
 
 	[Fact]
-	public async Task Treats_a_failing_settings_lookup_as_no_socket()
+	public async Task Reports_why_sbx_cannot_read_the_socket_setting()
 	{
 		var fixture = new LauncherFixture();
-		fixture.Runner.On("sbx settings get ssh.agentSocketPath", 1, LauncherFixture.Socket);
+		fixture.Runner.On(
+			"sbx settings get ssh.agentSocketPath",
+			new ProcessResult(1, LauncherFixture.Socket, "daemon is not running\n"));
 
 		var act = () => fixture.RunAsync(Defaults);
 
-		(await act.Should().ThrowAsync<LauncherException>()).Which.Message.Should().StartWith("sbx forwards '',");
+		(await act.Should().ThrowAsync<LauncherException>()).Which.Message.Should().Be(
+			$"cannot read sbx setting ssh.agentSocketPath (exit 1): {LauncherFixture.Socket}daemon is not running");
+		fixture.Runner.CommandLines.Should().NotContain(c => c.StartsWith("sbx create"));
 	}
 
 	[Fact]

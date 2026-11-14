@@ -81,7 +81,14 @@ internal sealed partial class Launcher(IProcessRunner runner, ISecretStore secre
 	{
 		await sshAgent.EnsureLoadedAsync(settings.SshSocket, settings.SshKey, cancellationToken);
 		var configured = await runner.RunAsync(Sbx("settings", "get", "ssh.agentSocketPath"), cancellationToken);
-		var socket = configured.Succeeded ? configured.StdOut.TrimEnd('\r', '\n') : string.Empty;
+		if (!configured.Succeeded)
+		{
+			// Usually the sbx daemon isn't running: its own message says so, unlike an empty socket path
+			throw new LauncherException(
+				$"cannot read sbx setting ssh.agentSocketPath (exit {configured.ExitCode}): {configured.StdOut}{configured.StdErr}".TrimEnd());
+		}
+
+		var socket = configured.StdOut.TrimEnd('\r', '\n');
 		if (socket != settings.SshSocket)
 		{
 			throw new LauncherException(
