@@ -8,12 +8,14 @@ on:
     branches: [main, "release/*"]
     paths:
       - sandbox/image/**
+      - skills/claude-code/**
       - .github/workflows/sandbox-image.yml
       - .github/scripts/**
       - renovate.json
   pull_request:
     paths:
       - sandbox/image/**
+      - skills/claude-code/**
       - .github/workflows/sandbox-image.yml
       - .github/scripts/**
       - renovate.json
@@ -118,6 +120,8 @@ jobs:
         if: steps.plan.outputs.build == 'true'
         with:
           context: sandbox/image
+          # Every skill in skills/claude-code ships in the image (docs/adr/0004)
+          build-contexts: skills=skills/claude-code
           platforms: linux/arm64
           push: ${{ steps.plan.outputs.push == 'true' }}
           load: true

@@ -193,6 +193,11 @@ RUN for skill in grill-me grilling; do \
 		> /etc/claude-code/skill-sources.tsv \
 	&& chmod -R a+rX /etc/claude-code
 
+# The repository's own skills, from the "skills" build context: skills/claude-code (docs/adr/0004). A named build
+# context, not a stage, so hadolint can't see it
+# hadolint ignore=DL3022
+COPY --from=skills . /etc/claude-code/.claude/skills/
+
 # "agent" is the base image's fixed non-root account, not a numeric id
 # hadolint ignore=DL3066
 USER agent

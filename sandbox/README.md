@@ -272,8 +272,18 @@ is in [the spec](../docs/specs/2026-10-23-sandbox-image-versioning.md) and ADRs
 | `x.y.z` | A release; immutable, CI never writes an existing one |
 | `x.y`, `x` | The highest release of that minor or major line |
 | `latest` | The highest release from `main` (maintenance releases never move it); the launcher's default |
-| `tree-<hash>` | One build per git tree of `sandbox/image`, never rebuilt; internal, deleted after 30 days unless released |
+| `tree-<hash>` | One build per image tree (below), never rebuilt; internal, deleted after 30 days unless released |
 | `sha-<short>` | Legacy: no longer published; existing tags stay |
+
+The image is built from `sandbox/image` and, as a second build context named `skills`, from `skills/claude-code`:
+every skill there ships in `/etc/claude-code/.claude/skills/`
+([ADR 0004](../docs/adr/0004-build-the-sandbox-image-from-the-repository-skills-too.md)). The image tree is a git
+tree of both, so a change to either is a new image:
+
+```bash
+printf '040000 tree %s\timage\n040000 tree %s\tskills\n' \
+  "$(git rev-parse HEAD:sandbox/image)" "$(git rev-parse HEAD:skills/claude-code)" | git mktree
+```
 
 ### SemVer for the image
 
@@ -287,8 +297,9 @@ is in [the spec](../docs/specs/2026-10-23-sandbox-image-versioning.md) and ADRs
 
 ### Releasing
 
-1. Every PR that changes `sandbox/image` adds its entry under `## [Unreleased]` (`### Added`, `### Changed`,
-   `### Removed`, `### Fixed`, `### Security`). CI, tests and internal refactoring need none.
+1. Every PR that changes `sandbox/image` or `skills/claude-code` adds its entry under `## [Unreleased]`
+   (`### Added`, `### Changed`, `### Removed`, `### Fixed`, `### Security`). CI, tests and internal refactoring need
+   none.
 2. To release, open a PR that turns `## [Unreleased]` into `## [x.y.z] - yyyy-mm-dd`, with the bump chosen from the
    entries by the rules above, and a summary of the Renovate updates merged since the last release.
 3. The merge publishes it: CI points `x.y.z`, `x.y`, `x` and `latest` at the `tree-<hash>` image the PR built, and
@@ -315,7 +326,7 @@ a tree is built.
 ### Inside a sandbox
 
 `/etc/claude-code/image-release` holds `VERSION` (`x.y.z`, or `<x.y.z>+unreleased.<tree>` for a build of unreleased
-changes), `TREE` (the `sandbox/image` tree hash) and `REVISION` (the commit the tree was built from: the PR head for
+changes), `TREE` (the image tree hash) and `REVISION` (the commit the tree was built from: the PR head for
 images built by a PR, which a merge retags without rebuilding, so it can differ from the `main` commit; the git tag
 `claude-sandbox.v<x.y.z>` points at that one). The OCI labels `org.opencontainers.image.version`, `revision` and
 `created` carry the same. `/etc/claude-code/inventory.sh` lists the toolchain as built. Claude Code and its plugins
