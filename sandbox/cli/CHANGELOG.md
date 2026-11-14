@@ -4,6 +4,15 @@ All notable changes to the `agent-sandbox` launcher (the `AgentSandbox` .NET too
 format follows [Keep a Changelog](https://keepachangelog.com) and versions follow [SemVer](https://semver.org). The
 first `## [x.y.z]` section must match `<Version>` in `src/AgentSandbox/AgentSandbox.csproj`: `dotnet cake` checks it.
 
+## [0.1.2] - 2026-11-14
+
+### Fixed
+
+- `sbx`, `git`, `ssh-agent` and `ssh-add` are looked up only in `PATH`, like a shell does. .NET looked in the current
+  directory and the tool's own first, so a file named `sbx` in `~` broke the launcher, and an executable one in a
+  repository would have run instead of the real program.
+- A program that exists but can't run reports why (exit 126, e.g. `Permission denied`) instead of `command not found`.
+
 ## [0.1.1] - 2026-11-14
 
 ### Fixed
