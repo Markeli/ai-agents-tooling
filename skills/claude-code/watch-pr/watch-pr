@@ -123,6 +123,13 @@ else
 	die_usage "not a PR/MR URL or number: $target"
 fi
 
+# Owners, groups and names: letters, digits, ".", "_", "-", separated by "/" (GitHub: exactly owner/name)
+if [ "$host" = github.com ]; then
+	[[ $project =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || die_usage "not a GitHub owner/repository: $project"
+else
+	[[ $project =~ ^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)+$ ]] || die_usage "not a GitLab project path: $project"
+fi
+
 case $host in
 github.com) tool=gh ;;
 gitlab.com) tool=glab ;;
@@ -164,11 +171,34 @@ state_file=$state_root/$session/$host/$project/$number.json
 mkdir -p "$(dirname "$state_file")" || die_usage "can't create the state directory for $state_file"
 echo "watch-pr: watching $ref every ${interval}s, state in $state_file" >&2
 
+bot_login=markeli-agent
+
+# Reports the events of the snapshot in $1 and saves the next state. Returns 10 when the PR/MR has ended.
+report() {
+	local previous=null result
+	[ ! -s "$state_file" ] || previous=$(cat "$state_file")
+	result=$(jq -n -f "$self_dir/events.jq" --argjson state "$previous" \
+		--arg authors "$authors" --arg me "$bot_login" --arg session "$session" --arg ref "$ref" \
+		--argjson snap "$(cat "$1")") || {
+		echo "watch-pr: can't diff the snapshot of $ref" >&2
+		return 1
+	}
+	jq -r '.lines[]' <<<"$result"
+	if [ "$(jq -r .ended <<<"$result")" = true ]; then
+		rm -f "$state_file"
+		return 10
+	fi
+	jq .state <<<"$result" >"$state_file.tmp" && mv "$state_file.tmp" "$state_file"
+}
+
 snapshot_file=$(mktemp)
 trap 'rm -f "$snapshot_file"' EXIT
 
 while :; do
-	poll >"$snapshot_file"
+	if poll >"$snapshot_file"; then
+		report "$snapshot_file"
+		[ $? != 10 ] || exit 0
+	fi
 	if $once; then
 		exit 0
 	fi
