@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Stub of the glab commands watch-pr runs. "mr view" answers from mr-view; "api <path>" from gitlab-<kind> by the
+# path's last resource: mr (merge_requests/<iid>), discussions, reviewers, jobs, commit.
+# shellcheck source=respond.sh source-path=SCRIPTDIR
+. "$(dirname "${BASH_SOURCE[0]}")/respond.sh"
+if [ "$1 $2" = "mr view" ]; then
+	respond mr-view "$@"
+fi
+if [ "$1" = api ]; then
+	path=
+	for arg in "${@:2}"; do
+		[[ $arg == -* ]] || path=$arg
+	done
+	path=${path%%\?*}
+	case "$path" in
+	*/discussions) respond gitlab-discussions "$@" ;;
+	*/reviewers) respond gitlab-reviewers "$@" ;;
+	*/jobs) respond gitlab-jobs "$@" ;;
+	*/repository/commits/*) respond gitlab-commit "$@" ;;
+	*/merge_requests/*) respond gitlab-mr "$@" ;;
+	esac
+fi
+echo "glab stub: unexpected $*" >&2
+exit 99

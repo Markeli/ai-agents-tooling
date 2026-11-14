@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Stub of the gh commands watch-pr runs: "api graphql" answers from graphql[.<n>], "pr view" from pr-view.
+# shellcheck source=respond.sh source-path=SCRIPTDIR
+. "$(dirname "${BASH_SOURCE[0]}")/respond.sh"
+case "$1 $2" in
+"api graphql") respond graphql "$@" ;;
+"pr view") respond pr-view "$@" ;;
+*)
+	echo "gh stub: unexpected $*" >&2
+	exit 99
+	;;
+esac

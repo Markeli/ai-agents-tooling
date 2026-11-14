@@ -1,0 +1,180 @@
+#!/usr/bin/env bash
+# Watches one GitHub PR or GitLab.com MR and prints one line per new event: the allow-listed authors' comments,
+# threads, replies and reviews, failed checks, and the merge or close that ends the watch
+# (docs/specs/2026-11-14-watch-pr.md). Meant to run as a Claude Code Monitor: each stdout line wakes the agent, so
+# only event lines go to stdout and diagnostics go to stderr.
+#
+# Usage: watch-pr [<url>|<number>] [--interval <seconds>] [--authors <file>] [--session <id>] [--state-dir <dir>]
+#                 [--max-runtime <seconds>] [--once]
+# Exit: 0 merged or closed (or --once), 1 fatal API error, 2 usage or environment error, 3 --max-runtime reached.
+#
+# Test-only environment: WATCH_PR_SLEEP replaces the sleep command.
+set -uo pipefail
+
+self=$(readlink -f "${BASH_SOURCE[0]}")
+self_dir=$(dirname "$self")
+# shellcheck source=github.sh source-path=SCRIPTDIR
+. "$self_dir/github.sh"
+# shellcheck source=gitlab.sh source-path=SCRIPTDIR
+. "$self_dir/gitlab.sh"
+
+interval=30
+max_runtime=1500
+once=false
+authors_file=/etc/claude-code/watch-pr/authors
+session=${CLAUDE_CODE_SESSION_ID:-}
+state_root=${XDG_STATE_HOME:-$HOME/.local/state}/watch-pr
+target=""
+
+die_usage() {
+	echo "watch-pr: $*" >&2
+	exit 2
+}
+
+# Checks that option $1 has a value $2 of whole seconds
+seconds() {
+	[[ ${2:-} =~ ^[0-9]+$ ]] || die_usage "$1 needs a number of seconds, got '${2:-}'"
+}
+
+while [ $# -gt 0 ]; do
+	case $1 in
+	--interval)
+		seconds "$1" "${2:-}"
+		interval=$2
+		shift 2
+		;;
+	--max-runtime)
+		seconds "$1" "${2:-}"
+		max_runtime=$2
+		shift 2
+		;;
+	--authors)
+		[ -n "${2:-}" ] || die_usage "--authors needs a file"
+		authors_file=$2
+		shift 2
+		;;
+	--session)
+		[ -n "${2:-}" ] || die_usage "--session needs an id"
+		session=$2
+		shift 2
+		;;
+	--state-dir)
+		[ -n "${2:-}" ] || die_usage "--state-dir needs a directory"
+		state_root=$2
+		shift 2
+		;;
+	--once)
+		once=true
+		shift
+		;;
+	-h | --help)
+		sed -n '2,10s/^# \{0,1\}//p' "$self"
+		exit 0
+		;;
+	-*) die_usage "unknown option $1" ;;
+	*)
+		[ -z "$target" ] || die_usage "more than one PR/MR given: $target, $1"
+		target=$1
+		shift
+		;;
+	esac
+done
+
+[ -n "$session" ] || die_usage "no session: pass --session or run in Claude Code, which sets CLAUDE_CODE_SESSION_ID"
+[[ $session =~ ^[A-Za-z0-9._-]+$ ]] || die_usage "invalid session id '$session'"
+
+# Sets host and project from the origin remote of the repository in the current directory
+from_origin() {
+	local url
+	url=$(git remote get-url origin 2>/dev/null) ||
+		die_usage "not in a git repository with an origin remote: pass a PR/MR URL"
+	if [[ $url =~ ^(ssh://)?[^@/]+@([^:/]+)[:/](.+)$ ]]; then
+		host=${BASH_REMATCH[2]}
+		project=${BASH_REMATCH[3]}
+	elif [[ $url =~ ^https?://([^/@]+@)?([^/]+)/(.+)$ ]]; then
+		host=${BASH_REMATCH[2]}
+		project=${BASH_REMATCH[3]}
+	else
+		die_usage "can't read the host of origin '$url': pass a PR/MR URL"
+	fi
+	project=${project%/}
+	project=${project%.git}
+}
+
+host=""
+project=""
+number=""
+if [[ $target =~ ^https://github\.com/([^/]+/[^/]+)/pull/([0-9]+)(/.*)?$ ]]; then
+	host=github.com
+	project=${BASH_REMATCH[1]}
+	number=${BASH_REMATCH[2]}
+elif [[ $target =~ ^https://gitlab\.com/(.+)/-/merge_requests/([0-9]+)(/.*)?$ ]]; then
+	host=gitlab.com
+	project=${BASH_REMATCH[1]}
+	number=${BASH_REMATCH[2]}
+elif [[ $target =~ ^https?://([^/]+) ]]; then
+	die_usage "unsupported host ${BASH_REMATCH[1]}: only github.com and gitlab.com"
+elif [[ $target =~ ^[0-9]+$ ]]; then
+	from_origin
+	number=$target
+elif [ -z "$target" ]; then
+	from_origin
+else
+	die_usage "not a PR/MR URL or number: $target"
+fi
+
+case $host in
+github.com) tool=gh ;;
+gitlab.com) tool=glab ;;
+*) die_usage "unsupported host $host: only github.com and gitlab.com" ;;
+esac
+for command in "$tool" jq flock git; do
+	command -v "$command" >/dev/null || die_usage "$command is required"
+done
+
+if [ -z "$number" ]; then
+	if [ "$tool" = gh ]; then
+		number=$(gh pr view --json number --jq .number 2>/dev/null)
+	else
+		number=$(glab mr view -F json 2>/dev/null | jq -r '.iid // empty')
+	fi
+	[[ $number =~ ^[0-9]+$ ]] || die_usage "no open PR/MR for the current branch: pass a PR/MR URL or number"
+fi
+
+if [ "$host" = github.com ]; then
+	ref="$project#$number"
+else
+	ref="$project!$number"
+fi
+
+[ -r "$authors_file" ] || die_usage "can't read the allow-list $authors_file"
+authors=$(awk -v host="$host" '!/^[[:space:]]*#/ && tolower($1) == host && NF >= 2 { print tolower($2) }' "$authors_file")
+[ -n "$authors" ] || die_usage "no allow-listed authors for $host in $authors_file"
+
+# One poll: prints the normalized snapshot (github.sh), returns 0, 1 (transient) or 2 (fatal, reason on stderr)
+poll() {
+	if [ "$host" = github.com ]; then
+		github_snapshot "$project" "$number"
+	else
+		gitlab_snapshot "$project" "$number"
+	fi
+}
+
+state_file=$state_root/$session/$host/$project/$number.json
+mkdir -p "$(dirname "$state_file")" || die_usage "can't create the state directory for $state_file"
+echo "watch-pr: watching $ref every ${interval}s, state in $state_file" >&2
+
+snapshot_file=$(mktemp)
+trap 'rm -f "$snapshot_file"' EXIT
+
+while :; do
+	poll >"$snapshot_file"
+	if $once; then
+		exit 0
+	fi
+	# Ends before the Monitor that runs it expires: the agent restarts it on exit 3
+	if ((SECONDS + interval >= max_runtime)); then
+		exit 3
+	fi
+	"${WATCH_PR_SLEEP:-sleep}" "$interval"
+done
