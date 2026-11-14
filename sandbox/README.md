@@ -130,10 +130,10 @@ as a Claude Code `Monitor`, and the bot is woken only by a line for a new commen
 allow-listed author, a failed check, or the merge or close that ends the watch. It fixes, pushes and replies in the
 thread, and also writes to the terminal when it disagrees or doesn't understand.
 
-- The allow-list is `sandbox/image/watch-pr/authors` (in the image: `/etc/claude-code/watch-pr/authors`), the owner
-  by default. Add a bot such as `github.com copilot-pull-request-reviewer[bot]`, or `markeli-agent` for a reviewer
-  session: every comment the bot posts ends with a hidden `<!-- watch-pr session=<id> -->`, and only another
-  session's marker wakes it.
+- The allow-list is `sandbox/image/watch-pr/authors` (in the image: `/etc/claude-code/watch-pr/authors`): the owner
+  and `markeli-agent`, for sessions in other roles such as a reviewer. Every comment the bot posts ends with a hidden
+  `<!-- watch-pr session=<id> -->`, and only another session's marker wakes it. Add a bot such as
+  `github.com copilot-pull-request-reviewer[bot]` the same way.
 - After a sandbox restart, resume with `/watch-pr` on the branch (or `/watch-pr <url>`): the first poll reports what
   came in meanwhile.
 - All sandboxes share the bot's GitHub token: a watcher costs about 120 GraphQL points an hour, and all of them slow

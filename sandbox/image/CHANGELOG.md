@@ -11,7 +11,8 @@ All notable changes to the `ghcr.io/markeli/claude-sandbox` image. The format fo
 - The `watch-pr` skill (`/watch-pr [<url>|<number>]`) and the `watch-pr` command: after opening a PR/MR, the bot
   watches it until it is merged or closed and is woken, without spending tokens in between, by the allow-listed
   authors' comments, threads, replies and reviews and by failed CI (GitHub and GitLab.com).
-- `/etc/claude-code/watch-pr/authors`: the allow-list, the owner on GitHub and GitLab.
+- `/etc/claude-code/watch-pr/authors`: the allow-list, the owner and `markeli-agent` (for sessions in other roles)
+  on GitHub and GitLab.
 - Source control rules: watch every PR/MR right after opening it, and end every PR/MR comment with the session
   marker.
 
