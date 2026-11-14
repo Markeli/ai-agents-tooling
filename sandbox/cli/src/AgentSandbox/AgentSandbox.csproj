@@ -8,7 +8,7 @@
 		<PackAsTool>true</PackAsTool>
 		<ToolCommandName>agent-sandbox</ToolCommandName>
 		<PackageId>AgentSandbox</PackageId>
-		<Version>0.1.0</Version>
+		<Version>0.1.1</Version>
 		<Description>Launcher for Docker Sandboxes (sbx): creates a clone-mode sandbox for a git repository once — bot SSH agent, keychain-backed secrets and an embedded sbx kit — then attaches to the coding agent running in it as the markeli-agent bot.</Description>
 		<RollForward>Major</RollForward>
 		<!-- The informational version names the directory the kits are written to: 0.1.0, not 0.1.0+<commit> -->
