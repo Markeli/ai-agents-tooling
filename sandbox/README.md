@@ -122,6 +122,25 @@ Network: no extra allow rules. `PLANNOTATOR_SHARE=disabled` turns off share link
 from the host, not from the sandbox. URL annotation tries `r.jina.ai` first and fetches the page directly when that
 is blocked; both go through the sandbox network policy.
 
+## Watching PRs/MRs
+
+After opening a PR/MR the bot runs the `/watch-pr` skill (`skills/claude-code/watch-pr`, spec
+[`2026-11-14-watch-pr.md`](../docs/specs/2026-11-14-watch-pr.md)): the `watch-pr` script polls it every 30 seconds
+as a Claude Code `Monitor`, and the bot is woken only by a line for a new comment, thread, reply or review of an
+allow-listed author, a failed check, or the merge or close that ends the watch. It fixes, pushes and replies in the
+thread, and also writes to the terminal when it disagrees or doesn't understand.
+
+- The allow-list is `sandbox/image/watch-pr/authors` (in the image: `/etc/claude-code/watch-pr/authors`), the owner
+  by default. Add a bot such as `github.com copilot-pull-request-reviewer[bot]`, or `markeli-agent` for a reviewer
+  session: every comment the bot posts ends with a hidden `<!-- watch-pr session=<id> -->`, and only another
+  session's marker wakes it.
+- After a sandbox restart, resume with `/watch-pr` on the branch (or `/watch-pr <url>`): the first poll reports what
+  came in meanwhile.
+- All sandboxes share the bot's GitHub token: a watcher costs about 120 GraphQL points an hour, and all of them slow
+  down to one poll in 5 minutes when less than 20% of the budget is left.
+- Tests: `skills/claude-code/watch-pr/tests/run.sh` (stub `gh`/`glab`), run by the `lint` job of
+  `sandbox-image.yml`.
+
 ## Status line
 
 `image/statusline.sh` is copied to `/etc/claude-code/statusline.sh` and wired up via `statusLine` in

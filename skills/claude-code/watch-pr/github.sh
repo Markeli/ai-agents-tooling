@@ -43,11 +43,11 @@ github_query='query($owner: String!, $name: String!, $number: Int!) {
     pullRequest(number: $number) {
       url
       state
-      comments(last: 100) { nodes { databaseId author { login } url body createdAt } }
+      comments(last: 100) { nodes { databaseId author { __typename login } url body createdAt } }
       reviewThreads(last: 100) {
-        nodes { comments(last: 100) { nodes { databaseId author { login } url body createdAt } } }
+        nodes { comments(last: 100) { nodes { databaseId author { __typename login } url body createdAt } } }
       }
-      reviews(last: 100) { nodes { databaseId author { login } url state body submittedAt } }
+      reviews(last: 100) { nodes { databaseId author { __typename login } url state body submittedAt } }
       commits(last: 1) {
         nodes {
           commit {
@@ -75,8 +75,10 @@ github_query='query($owner: String!, $name: String!, $number: Int!) {
 github_normalize='
 .data.repository.pullRequest as $pr
 | ($pr.commits.nodes[0].commit // {}) as $head
-| def comment($kind): {id: "\($kind):\(.databaseId)", author: (.author.login // "ghost"), url, body,
-    created: .createdAt};
+# GraphQL names a GitHub App "github-actions" where REST and the allow-list say "github-actions[bot]"
+| def login: if .author == null then "ghost" elif .author.__typename == "Bot" then .author.login + "[bot]"
+    else .author.login end;
+def comment($kind): {id: "\($kind):\(.databaseId)", author: login, url, body, created: .createdAt};
 {
   url: $pr.url,
   state: ($pr.state | ascii_downcase),
@@ -88,7 +90,7 @@ github_normalize='
     + [$pr.reviews.nodes[]
         | select(.state == "CHANGES_REQUESTED"
             or ((.state == "APPROVED" or .state == "COMMENTED") and (.body // "") != ""))
-        | {id: "r:\(.databaseId)", kind: "review", author: (.author.login // "ghost"), url, body,
+        | {id: "r:\(.databaseId)", kind: "review", author: login, url, body,
            created: .submittedAt, verdict: (.state | ascii_downcase)}]
   ),
   failed: [($head.statusCheckRollup.contexts.nodes // [])[]

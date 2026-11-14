@@ -87,6 +87,9 @@ gh_comment() {
 		  body: $body, createdAt: $at}'
 }
 
+# A comment node by a GitHub App, which GraphQL names without "[bot]": $1 id, $2 app login, $3 body, $4 time
+gh_bot_comment() { gh_comment "$1" "$2" "$3" "$4" | jq -c '.author.__typename = "Bot"'; }
+
 # A review node: $1 id, $2 login, $3 state, $4 body, $5 time
 gh_review() {
 	jq -cn --argjson id "$1" --arg login "$2" --arg state "$3" --arg body "$4" --arg at "$5" \
@@ -268,7 +271,7 @@ begin others_ignored
 gh_answer 1
 gh_answer 2 comments="[$(gh_comment 51 github-advanced-security[bot] 'Alert' 2026-11-14T11:00:00Z),
 	$(gh_comment 52 someone 'Drive-by' 2026-11-14T11:01:00Z)]" \
-	threads="[[$(gh_comment 53 copilot-pull-request-reviewer[bot] 'Nit' 2026-11-14T11:02:00Z)]]"
+	threads="[[$(gh_bot_comment 53 copilot-pull-request-reviewer 'Nit' 2026-11-14T11:02:00Z)]]"
 watch_once "$gh_url"
 watch_once "$gh_url"
 expect_no_out
