@@ -9,6 +9,16 @@
 #   $me       the bot's own login; $session the session id; $ref the PR/MR reference for the lines
 # Output: {lines: [event lines], state: next state, ended: bool}
 
+# Seconds since the epoch of an ISO 8601 time with Z or a ±hh:mm offset; fractions of a second are dropped
+def epoch: if . == null then 0 else
+  sub("\\.[0-9]+"; "") as $t
+  | if ($t | test("[+-][0-9]{2}:[0-9]{2}$")) then
+      $t[-6:] as $zone
+      | (($zone[1:3] | tonumber) * 3600 + ($zone[4:6] | tonumber) * 60) as $offset
+      | ($t[:-6] + "Z" | fromdateiso8601) - (if $zone[0:1] == "+" then $offset else -$offset end)
+    else $t | fromdateiso8601 end
+  end;
+
 def marker: (.body // "") | (capture("<!-- watch-pr session=(?<s>[A-Za-z0-9._-]+) -->").s // null);
 
 def one_line: gsub("<!-- watch-pr session=[A-Za-z0-9._-]+ -->"; " ") | gsub("\\s+"; " ") | ltrimstr(" ")
@@ -27,19 +37,30 @@ def line($kind; $author; $url; $text): "watch-pr \($ref) \($kind) \($author | fi
     | any($allowed[]; . == $author)
       and (if $author == $bot then (marker as $m | $m != null and $m != $session) else true end);
 ($state // {seen: [], failed: [], reviewers: {}}) as $previous
-| ($snap.items | sort_by(.created)) as $items
+| ($snap.items | sort_by(.created | epoch)) as $items
 | [$items[] | select(.id as $id | $previous.seen | index([$id]) | not) | select(wakes)] as $new
 | [$snap.failed[] | select(.key as $key | $previous.failed | index([$key]) | not)] as $failed
 | ($snap.state == "merged" or $snap.state == "closed") as $ended
-| {
+# The first poll of a session reports what still waits for the bot: items of others after its latest comment or the
+# head commit, whichever is later, and the checks that have failed. Its own items can't be told from another
+# session's here, so none are caught up.
+| ([$items[] | select(.author | ascii_downcase == $bot) | .created | epoch] + [$snap.head.date | epoch] | max)
+  as $cutoff
+| def text: if .kind == "review" then
+      (.verdict + (if (.body // "" | one_line) == "" then "" else ": " + (.body | one_line) end)) | excerpt
+    else .body | excerpt end;
+# Check names and links come from any CI app: printed only in a strict charset, so they can't carry instructions
+def check_name: gsub("[^A-Za-z0-9 ._/:()-]"; "_") | .[0:100];
+def check_url: if (. // "") | test("^https://[A-Za-z0-9.-]+(/[A-Za-z0-9._~%/:?#=&+-]*)?$") then . else "-" end;
+{
     lines: (
-      if $state == null then [] else
-        [$new[] | line(.kind; .author; .url;
-          if .kind == "review" then
-            (.verdict + (if (.body // "" | one_line) == "" then "" else ": " + (.body | one_line) end)) | excerpt
-          else .body | excerpt end)]
-        + [$failed[] | line("ci-failed"; null; .url; .name | excerpt)]
+      if $state == null then
+        [$items[] | select(wakes and (.author | ascii_downcase) != $bot and (.created | epoch) > $cutoff)
+          | line(.kind; .author; .url; text)]
+      else
+        [$new[] | line(.kind; .author; .url; text)]
       end
+      + [$failed[] | line("ci-failed"; null; .url | check_url; .name | check_name | excerpt)]
       + (if $ended then [line($snap.state; null; $snap.url; "-")] else [] end)
     ),
     state: {

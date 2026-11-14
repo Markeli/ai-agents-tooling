@@ -169,6 +169,12 @@ poll() {
 
 state_file=$state_root/$session/$host/$project/$number.json
 mkdir -p "$(dirname "$state_file")" || die_usage "can't create the state directory for $state_file"
+# One watcher per PR/MR and session; the kernel drops the lock with the process, so a crash leaves none behind
+exec 9>"$state_file.lock"
+flock -n 9 || die_usage "$ref is already watched in this session (lock $state_file.lock)"
+# Sessions idle for 30 days are gone; this one's mtime marks it as used
+find "$state_root" -mindepth 1 -maxdepth 1 -type d -mtime +30 ! -name "$session" -exec rm -rf {} +
+touch "$state_root/$session"
 echo "watch-pr: watching $ref every ${interval}s, state in $state_file" >&2
 
 bot_login=markeli-agent
