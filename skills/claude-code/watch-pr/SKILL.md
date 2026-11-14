@@ -86,5 +86,5 @@ itself while a session of another role (a reviewer on the same `markeli-agent` a
 
 ## Who wakes you
 
-Only the authors in `/etc/claude-code/watch-pr/authors` (`<host> <login>` per line; the owner and `markeli-agent` by default) and failed
-checks. Others' comments, resolving a thread, edits, labels and reviewer changes don't.
+Only the authors in `/etc/claude-code/watch-pr/authors` (`<host> <login>` per line; the owner and `markeli-agent` by
+default) and failed checks. Others' comments, resolving a thread, edits, labels and reviewer changes don't.
