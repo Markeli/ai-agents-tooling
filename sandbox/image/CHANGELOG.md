@@ -15,6 +15,8 @@ All notable changes to the `ghcr.io/markeli/claude-sandbox` image. The format fo
   counters and blocking calls.
 - Source control rules: build open PRs/MRs that touch shared files together before calling them independent; review
   and disclose subagent-made bulk changes; follow release and deploy pipelines after a merge to the end.
+- Hard git rules: a 5xx error from GitHub/GitLab may be retried once after checking that the action didn't take
+  effect; auth errors still stop the bot.
 
 ## [1.1.0] - 2026-11-14
 
