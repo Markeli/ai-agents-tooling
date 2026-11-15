@@ -11,6 +11,11 @@
 - If it almost fits, propose improving the package instead of working around it. A third-party package comes in only
   when no Curiosus package covers the need; record that choice in an ADR when it is significant
   (see `/etc/claude-code/rules/specs-and-adrs.md`).
+- Before working around a bug or a gap of a Curiosus package in an app, check the package's `main`, the
+  `## [Unreleased]` section of its CHANGELOG and its open issues. A fix that exists but isn't released is not copied
+  into the app (no copied classes, no local filters): the app issue waits for the release. Otherwise open an issue in
+  the library, or comment on the issue that will cover it, with the app as the use case. Then ask the owner whether to
+  wait or to add a temporary workaround, and link the library issue from the app's PR/MR.
 
 ## Dependency versions
 

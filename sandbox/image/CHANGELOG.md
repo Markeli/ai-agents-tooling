@@ -4,6 +4,18 @@ All notable changes to the `ghcr.io/markeli/claude-sandbox` image. The format fo
 [Keep a Changelog](https://keepachangelog.com), and versions follow the image SemVer rules in
 [`sandbox/README.md`](../README.md#image-versioning): the first `## [x.y.z]` section is the image version.
 
+## [Unreleased]
+
+### Changed
+
+- Library rules: before working around a bug or gap of a Curiosus package in an app, check its `main`,
+  `[Unreleased]` and issues; don't copy an unreleased fix into the app, open or comment on a library issue instead and
+  ask the owner whether to wait.
+- .NET rules: established mechanisms (Polly on a named `HttpClient`, `IAsyncDisposable`) over hand-written retries,
+  counters and blocking calls.
+- Source control rules: build open PRs/MRs that touch shared files together before calling them independent; review
+  and disclose subagent-made bulk changes; follow release and deploy pipelines after a merge to the end.
+
 ## [1.1.0] - 2026-11-14
 
 ### Added

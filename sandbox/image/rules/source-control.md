@@ -40,6 +40,13 @@ BREAKING CHANGE: <what breaks and how to migrate>
   `glab mr create --assignee markeli-agent --reviewer markeli ...`. If either can't be set, say so instead of
   dropping it silently.
 - Reply to review comments in their threads; push fixes as new commits.
+- When several of your PRs/MRs are open at once and touch dependencies, build files or shared code, build and test
+  them merged together before saying they can be merged in any order: each can be green alone and break `main`
+  together.
+- Mechanical bulk changes (hundreds of analyzer or rename sites) may be delegated to a subagent; review its whole diff
+  yourself and say in the PR/MR description which part it made.
+- After a merge that releases or deploys, follow the resulting pipelines to the end and report the outcome; don't
+  report a release or deploy you haven't seen succeed.
 - Right after opening a PR/MR, watch it with the `/watch-pr` skill until it is merged or closed: it wakes you on the
   owner's comments, replies, reviews and failed CI.
 - End every comment, reply and review body you post on a PR/MR with the line
