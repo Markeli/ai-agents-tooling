@@ -4,6 +4,18 @@ All notable changes to the `ghcr.io/markeli/claude-sandbox` image. The format fo
 [Keep a Changelog](https://keepachangelog.com), and versions follow the image SemVer rules in
 [`sandbox/README.md`](../README.md#image-versioning): the first `## [x.y.z]` section is the image version.
 
+## [Unreleased]
+
+### Changed
+
+- Source control rules: stacked PRs/MRs without force-push (merge the lower branch, retarget the base, comment the
+  merge order); a flaky test from another PR is fixed in a separate `test:` PR; a handoff issue is kept up to date for
+  work spanning sessions; a subagent reviews large diffs before the PR/MR; claims in descriptions and docs are
+  verified first.
+- Library rules: ask the owner before a breaking change in curiosus-dev repositories; release a package together with
+  or after the dependencies whose new API it uses.
+- Sandbox limits: `lscr.io` is blocked (use the Docker Hub copies), third-party API calls need approval.
+
 ## [1.1.0] - 2026-11-14
 
 ### Added

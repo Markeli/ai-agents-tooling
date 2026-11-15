@@ -22,6 +22,11 @@
 Applies when the repository publishes NuGet packages. In Curiosus repositories `.claude/curiosus.md` is the full
 reference (Cake targets, release workflow, maintenance branches); follow it over this summary.
 
+- Breaking changes: in curiosus-dev repositories ask the owner explicitly before making one, even inside a planned
+  major, and offer the compatible alternative (an `[Obsolete]` overload, a new member next to the old one) with its
+  cost. Don't assume a major version makes any break acceptable.
+- A package's dependency version in the nupkg is the dependency's released version: a package that uses an API of an
+  unreleased dependency must be released together with or after that dependency, pre-releases included.
 - Semantic Versioning: major for incompatible changes (public API, behaviour consumers rely on, dropped target
   frameworks, stored identifiers such as message type names), minor for compatible features, patch for compatible
   fixes. Pre-releases are `x.y.z-alpha.N` / `-beta.N` / `-rc.N`.

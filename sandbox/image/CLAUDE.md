@@ -66,3 +66,6 @@ next person or agent needs belongs in the repository, where it is reviewed like 
 - Docker runs inside the sandbox VM (arm64). Images published only for amd64, such as SQL Server, do not start here;
   say so instead of working around it.
 - Outbound network is allow-listed. If a host is blocked, report which one rather than looking for another route.
+  Known: `lscr.io` (LinuxServer images) is blocked, their Docker Hub copies (`linuxserver/...`) work; calls to
+  third-party APIs (SMS, mail and payment providers) need the owner's approval first, so verify such integrations with
+  a stub and say what is left for a live check.
