@@ -8,14 +8,13 @@
   readers/writers — see its "Available packages" table), `Curiosus.Migrations` (database migrations),
   `Curiosus.TelegramBot` (Telegram bots), `dotnet-tools` (shared build, CI, release and editor setup).
 - Read the package's README or source before using it; don't guess its API.
-- If it almost fits, propose improving the package instead of working around it. A third-party package comes in only
-  when no Curiosus package covers the need; record that choice in an ADR when it is significant
-  (see `/etc/claude-code/rules/specs-and-adrs.md`).
-- Before working around a bug or a gap of a Curiosus package in an app, check the package's `main`, the
-  `## [Unreleased]` section of its CHANGELOG and its open issues. A fix that exists but isn't released is not copied
-  into the app (no copied classes, no local filters): the app issue waits for the release. Otherwise open an issue in
-  the library, or comment on the issue that will cover it, with the app as the use case. Then ask the owner whether to
-  wait or to add a temporary workaround, and link the library issue from the app's PR/MR.
+- If it almost fits or has a bug, propose improving the package instead of working around it. First check its `main`,
+  the `## [Unreleased]` section of its CHANGELOG and its open issues: a fix that exists but isn't released is not
+  copied into the app (no copied classes, no local filters), the app waits for the release. Otherwise open an issue in
+  the library, or comment on the one that will cover it, with the app as the use case; ask the owner whether to wait
+  or to add a temporary workaround, and link the library issue from the app's PR/MR.
+- A third-party package comes in only when no Curiosus package covers the need; record that choice in an ADR when it
+  is significant (see `/etc/claude-code/rules/specs-and-adrs.md`).
 
 ## Dependency versions
 
@@ -27,6 +26,11 @@
 Applies when the repository publishes NuGet packages. In Curiosus repositories `.claude/curiosus.md` is the full
 reference (Cake targets, release workflow, maintenance branches); follow it over this summary.
 
+- Breaking changes: in curiosus-dev repositories ask the owner explicitly before making one, even inside a planned
+  major, and offer the compatible alternative (an `[Obsolete]` overload, a new member next to the old one) with its
+  cost. Don't assume a major version makes any break acceptable.
+- A package's dependency version in the nupkg is the dependency's released version: a package that uses an API of an
+  unreleased dependency must be released together with or after that dependency, pre-releases included.
 - Semantic Versioning: major for incompatible changes (public API, behaviour consumers rely on, dropped target
   frameworks, stored identifiers such as message type names), minor for compatible features, patch for compatible
   fixes. Pre-releases are `x.y.z-alpha.N` / `-beta.N` / `-rc.N`.
