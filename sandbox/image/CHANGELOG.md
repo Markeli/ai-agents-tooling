@@ -9,12 +9,19 @@ All notable changes to the `ghcr.io/markeli/claude-sandbox` image. The format fo
 ### Changed
 
 - Source control rules: stacked PRs/MRs without force-push (merge the lower branch, retarget the base, comment the
-  merge order); a flaky test from another PR is fixed in a separate `test:` PR; a handoff issue is kept up to date for
-  work spanning sessions; a subagent reviews large diffs before the PR/MR; claims in descriptions and docs are
-  verified first.
+  merge order), and PRs/MRs open at the same time that touch shared files are built together; a flaky test from
+  another PR is fixed in a separate `test:` PR; a handoff issue is kept up to date for work spanning sessions; a
+  subagent reviews large diffs before the PR/MR, and subagent-made bulk changes are reviewed and disclosed; claims in
+  descriptions and docs are verified first; release and deploy pipelines are followed to the end after a merge.
 - Library rules: ask the owner before a breaking change in curiosus-dev repositories; release a package together with
-  or after the dependencies whose new API it uses.
+  or after the dependencies whose new API it uses; before working around a bug or gap of a Curiosus package in an app,
+  check its `main`, `[Unreleased]` and issues, don't copy an unreleased fix into the app, open or comment on a library
+  issue instead and ask the owner whether to wait.
+- .NET rules: established mechanisms (Polly on a named `HttpClient`, `IAsyncDisposable`) over hand-written retries,
+  counters and blocking calls.
 - Sandbox limits: `lscr.io` is blocked (use the Docker Hub copies), third-party API calls need approval.
+- Hard git rules: a 5xx error from GitHub/GitLab may be retried once after checking that the action didn't take
+  effect; auth errors still stop the bot.
 
 ## [1.1.0] - 2026-11-14
 

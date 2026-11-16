@@ -8,9 +8,13 @@
   readers/writers — see its "Available packages" table), `Curiosus.Migrations` (database migrations),
   `Curiosus.TelegramBot` (Telegram bots), `dotnet-tools` (shared build, CI, release and editor setup).
 - Read the package's README or source before using it; don't guess its API.
-- If it almost fits, propose improving the package instead of working around it. A third-party package comes in only
-  when no Curiosus package covers the need; record that choice in an ADR when it is significant
-  (see `/etc/claude-code/rules/specs-and-adrs.md`).
+- If it almost fits or has a bug, propose improving the package instead of working around it. First check its `main`,
+  the `## [Unreleased]` section of its CHANGELOG and its open issues: a fix that exists but isn't released is not
+  copied into the app (no copied classes, no local filters), the app waits for the release. Otherwise open an issue in
+  the library, or comment on the one that will cover it, with the app as the use case; ask the owner whether to wait
+  or to add a temporary workaround, and link the library issue from the app's PR/MR.
+- A third-party package comes in only when no Curiosus package covers the need; record that choice in an ADR when it
+  is significant (see `/etc/claude-code/rules/specs-and-adrs.md`).
 
 ## Dependency versions
 

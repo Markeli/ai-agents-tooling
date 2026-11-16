@@ -37,12 +37,14 @@ BREAKING CHANGE: <what breaks and how to migrate>
   was not verified. Claims in the description and in docs (an API format, an environment variable, a tool's
   behaviour) are checked by running them or against the primary source first; what couldn't be checked is named.
 - Before opening a large PR/MR (a new API, a rewrite, many files), have a subagent review the diff for correctness
-  bugs and fix what it confirms; say so in the description.
+  bugs and fix what it confirms; say so in the description. Mechanical bulk changes (hundreds of analyzer or rename
+  sites) may also be made by a subagent: review its whole diff yourself and say which part it made.
 - Assign the PR/MR to yourself (`markeli-agent`) and request review from the owner (GitHub `Markeli`, GitLab
   `markeli`): `gh pr create --assignee markeli-agent --reviewer Markeli ...`,
   `glab mr create --assignee markeli-agent --reviewer markeli ...`. If either can't be set, say so instead of
   dropping it silently.
 - Reply to review comments in their threads; push fixes as new commits.
+- After a merge that releases or deploys, follow the resulting pipelines to the end and report the outcome.
 - Right after opening a PR/MR, watch it with the `/watch-pr` skill until it is merged or closed: it wakes you on the
   owner's comments, replies, reviews and failed CI.
 - End every comment, reply and review body you post on a PR/MR with the line
@@ -58,6 +60,9 @@ of letting each conflict with `main`:
 - Set the upper PR's base to the lower PR's branch (`gh pr edit <n> --base <branch>`), so its diff shows only its own
   change, and comment the merge order (bottom-up) on each upper PR.
 - After the lower PR is merged, merge the default branch into the next one if its base doesn't switch on its own.
+- PRs/MRs open at the same time that touch dependencies, build files or shared code but aren't stacked: build and test
+  them merged together before saying they can be merged in any order; each can be green alone and break `main`
+  together.
 
 ### Failures not caused by the PR/MR
 

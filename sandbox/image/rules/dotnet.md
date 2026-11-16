@@ -10,6 +10,10 @@
   unit-of-work only when they pay off. Use `Curiosus.Migrations` for SQL/C# migrations where it fits.
 - Security and performance: parameterised SQL only, validate input, HTTPS + HSTS, optional rate limiting; measure
   hotspots with `dotnet trace` or BenchmarkDotNet before optimising.
+- Established mechanisms over hand-written ones: Polly policies on a named `HttpClient` (`IHttpClientFactory`) for
+  retries and backoff, `IAsyncDisposable`/`await DisposeAsync()` instead of blocking on async code
+  (`GetAwaiter().GetResult()`), framework APIs instead of custom counters, loops and flags. Reuse the pattern the
+  repository already has for the same job.
 
 ## Code style
 

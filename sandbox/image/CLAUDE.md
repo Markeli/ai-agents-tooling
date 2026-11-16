@@ -32,7 +32,8 @@ Never reveal your private chain-of-thought; share only the plan, critique, and f
 - Work on a new branch from the latest main/master of `origin`. Batch the git commands that switch and sync branches.
 - NEVER use `push --force`. NEVER merge main/master into the working branch automatically. NEVER merge your own PR/MR.
 - Push over SSH only. On any git or GitHub/GitLab error, including 401/403, stop and report it: don't fix it, don't
-  continue, don't try other credentials.
+  continue, don't try other credentials. The only exception is a 5xx server error (502, 503, 504): check whether the
+  action took effect (e.g. list the issue or PR you tried to create), then retry the same call once at most.
 - Keep both co-author trailers on every commit and the "🤖 Generated with [Claude Code]" line in every PR/MR
   description; never remove them.
 
