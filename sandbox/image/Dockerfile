@@ -246,6 +246,7 @@ RUN uv venv "${SECURITY_WARNINGS_STATE_DIR}/agent-sdk-venv" --python /usr/bin/py
 # statusline.sh is 755 in the repo, so it stays readable and executable by the agent user after the copy.
 COPY managed-settings.json /etc/claude-code/managed-settings.json
 COPY CLAUDE.md /etc/claude-code/CLAUDE.md
+COPY AGENTS.md /etc/claude-code/AGENTS.md
 COPY rules/ /etc/claude-code/rules/
 COPY templates/ /etc/claude-code/templates/
 COPY statusline.sh /etc/claude-code/statusline.sh

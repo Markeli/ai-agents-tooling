@@ -20,6 +20,8 @@ All notable changes to the `ghcr.io/markeli/claude-sandbox` image. The format fo
 - .NET rules: established mechanisms (Polly on a named `HttpClient`, `IAsyncDisposable`) over hand-written retries,
   counters and blocking calls.
 - Sandbox limits: `lscr.io` is blocked (use the Docker Hub copies), third-party API calls need approval.
+- The bot rules entry point is `/etc/claude-code/AGENTS.md`; `/etc/claude-code/CLAUDE.md` only imports it
+  (`@AGENTS.md`), so the rules no longer live in a Claude-specific file. Nothing changes for the bot.
 - Hard git rules: a 5xx error from GitHub/GitLab may be retried once after checking that the action didn't take
   effect; auth errors still stop the bot.
 

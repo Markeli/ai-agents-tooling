@@ -13,7 +13,8 @@ sandbox/
 │   ├── inventory.sh        lists the toolchain with versions (/etc/claude-code/inventory.sh)
 │   ├── managed-settings.json  plugins, commit/PR attribution, Remote Control, claude.ai connectors off
 │   ├── git-hooks/          system core.hooksPath: co-author trailers, chains to repository hooks
-│   ├── CLAUDE.md           bot rules entry point, loaded as managed instructions
+│   ├── AGENTS.md           bot rules entry point
+│   ├── CLAUDE.md           managed instructions of Claude Code: only `@AGENTS.md`
 │   ├── rules/              topic rules the entry point tells the bot to read on demand
 │   └── templates/          spec and ADR templates (/etc/claude-code/templates)
 ├── kits/markeli-claude/    v3 mixin for sbx's claude kit: network rules, bot ssh-agent, Plannotator port, gitlab credential
@@ -55,7 +56,7 @@ Every bot commit carries both `Co-Authored-By: Claude <noreply@anthropic.com>` a
 `Co-authored-by: Maxim Markelow <markelow.dev@gmail.com>`, and every PR/MR description the
 "🤖 Generated with [Claude Code](https://claude.com/claude-code)" line. Two layers make that happen:
 
-1. **`attribution` in `managed-settings.json`** (plus a rule in the managed `CLAUDE.md`): Claude Code's own commit and
+1. **`attribution` in `managed-settings.json`** (plus a rule in the managed `AGENTS.md`): Claude Code's own commit and
    PR attribution, extended with the owner's trailer. It is an instruction to the model, so it covers only commits
    and PRs that Claude Code writes itself.
 2. **`git-hooks/` as the system `core.hooksPath`** (`/etc/git-hooks`): a `prepare-commit-msg` hook adds both trailers
@@ -77,9 +78,11 @@ covered only by the `attribution` layer.
 
 ## Bot instructions
 
-`image/CLAUDE.md` is copied to `/etc/claude-code/CLAUDE.md` and loaded in every session, so it holds only what applies
-to every message: role, workflow, hard git rules, what to do with knowledge it discovers and sandbox limits, plus a
-table of topic files. The topic rules in
+`image/AGENTS.md` is copied to `/etc/claude-code/AGENTS.md` and loaded in every session through
+`/etc/claude-code/CLAUDE.md`, Claude Code's managed instructions file, which contains only the import `@AGENTS.md`
+(imports resolve relative to the importing file). The rules themselves are not tied to one agent; another agent's entry
+point can import or copy the same file. It holds only what applies to every message: role, workflow, hard git rules,
+what to do with knowledge it discovers and sandbox limits, plus a table of topic files. The topic rules in
 `image/rules/` (`dotnet.md`, `libraries.md`, `source-control.md`, `specs-and-adrs.md`) land in `/etc/claude-code/rules/`
 and are read by the bot with the Read tool before the matching work. They are referenced by plain paths on purpose: an
 `@path` import would be loaded at startup and save nothing. A repository's own `CLAUDE.md`/`AGENTS.md` and synced

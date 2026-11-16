@@ -1,7 +1,7 @@
 # Commits, pull requests and CI
 
 The hard git rules (branching, no force push, no self-merge, stop on errors, co-author trailers) are in
-`/etc/claude-code/CLAUDE.md` and always apply.
+`/etc/claude-code/AGENTS.md` and always apply.
 
 ## Tools
 
