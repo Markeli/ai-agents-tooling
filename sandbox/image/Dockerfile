@@ -24,7 +24,7 @@ ARG HADOLINT_VERSION=2.15.1
 # renovate: datasource=github-releases depName=hashicorp/terraform
 ARG TERRAFORM_VERSION=1.17.2
 # renovate: datasource=github-releases depName=backnotprop/plannotator
-ARG PLANNOTATOR_VERSION=0.28.64
+ARG PLANNOTATOR_VERSION=0.28.66
 # renovate: datasource=nuget depName=csharp-ls
 ARG CSHARP_LS_VERSION=0.28.0
 # renovate: datasource=npm depName=typescript-language-server
@@ -33,7 +33,7 @@ ARG TS_LS_VERSION=6.1.0
 # renovate: datasource=npm depName=typescript
 ARG TYPESCRIPT_VERSION=6.0.3
 # renovate: datasource=npm depName=pnpm
-ARG PNPM_VERSION=12.18.0
+ARG PNPM_VERSION=12.21.0
 # renovate: datasource=npm depName=yarn packageName=@yarnpkg/cli-dist
 ARG YARN_VERSION=4.18.1
 # renovate: datasource=pypi depName=ansible-core
@@ -41,11 +41,11 @@ ARG ANSIBLE_CORE_VERSION=2.22.0
 # renovate: datasource=pypi depName=ansible-lint
 ARG ANSIBLE_LINT_VERSION=26.11.0
 # renovate: datasource=pypi depName=claude-agent-sdk
-ARG CLAUDE_AGENT_SDK_VERSION=0.2.181
+ARG CLAUDE_AGENT_SDK_VERSION=0.2.182
 # renovate: datasource=git-refs depName=https://github.com/mattpocock/skills branch=main
 ARG MATTPOCOCK_SKILLS_COMMIT=5863806dd4e15c63174bee4e7515a4256792ecfa
 # renovate: datasource=git-refs depName=https://github.com/anthropics/claude-plugins-official branch=main
-ARG CLAUDE_PLUGINS_OFFICIAL_COMMIT=099387b7a2ea02022bb850becca750246ae12562
+ARG CLAUDE_PLUGINS_OFFICIAL_COMMIT=b5b01ac4f889fec0c4c6bb89f27ca7c8574473f6
 ARG BOT_NAME=markeli-agent
 ARG BOT_EMAIL=markelow.dev+agent@gmail.com
 
