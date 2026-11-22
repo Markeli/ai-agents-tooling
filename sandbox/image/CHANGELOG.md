@@ -6,6 +6,13 @@ All notable changes to the `ghcr.io/markeli/claude-sandbox` image. The format fo
 
 ## [Unreleased]
 
+### Added
+
+- Playwright (`PLAYWRIGHT_VERSION`) with headless Chromium in `/opt/ms-playwright`: the bot checks web pages in a
+  browser without downloading one per session; `NODE_PATH` lets a one-off script `require('playwright')`.
+- `trust-proxy-ca.sh`, run by a SessionStart hook: adds the sbx proxy CA to the agent's NSS database, which is the
+  only trust store Chromium reads on Linux, so pages open through the proxy without certificate errors.
+
 ### Changed
 
 - Source control rules: stacked PRs/MRs without force-push (merge the lower branch, retarget the base, comment the

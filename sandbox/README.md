@@ -29,6 +29,10 @@ sandbox/
 - **Node.js**: current LTS from NodeSource, with corepack enabled and `pnpm`/`yarn` pre-activated for the `agent`
   user (no download/prompt on first use) — builds Docusaurus and Astro sites with npm, pnpm or yarn;
   global `typescript-language-server` with TypeScript 6 (TypeScript 7 is the native compiler without `tsserver`)
+- **Browser checks**: global `playwright` (pinned by `PLAYWRIGHT_VERSION`) with headless Chromium in
+  `PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright`; `NODE_PATH` lets a one-off script `require('playwright')` without
+  an install. A SessionStart hook (`trust-proxy-ca.sh`) adds the sbx proxy CA to the agent's NSS database, so
+  Chromium opens HTTPS pages through the proxy without `ignoreHTTPSErrors`
 - **Source control**: `gh`, `glab`
 - **IaC / config**: `terraform`, `yq`, `ansible-core`, `ansible-lint` (the last two via `uv tool install`)
 - **CI / linting**: `actionlint`, `hadolint`, `shellcheck`, `shfmt`

@@ -61,7 +61,9 @@ next person or agent needs belongs in the repository, where it is reviewed like 
 
 ## Sandbox limits
 
-- Toolchain: .NET 9 and 10 SDKs (no .NET 8 runtime), Node.js LTS, `gh`, `glab`, Docker inside the VM.
+- Toolchain: .NET 9 and 10 SDKs (no .NET 8 runtime), Node.js LTS, `gh`, `glab`, Docker inside the VM, Playwright
+  with headless Chromium (`require('playwright')` works from any script, no install; the proxy CA is trusted, so
+  don't pass `ignoreHTTPSErrors`).
   `/etc/claude-code/image-release` holds the image `VERSION`, `TREE` and `REVISION`, and
   `/etc/claude-code/inventory.sh` lists the toolchain with versions as built (Claude Code and plugins may have
   auto-updated since).
