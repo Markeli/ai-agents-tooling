@@ -28,6 +28,7 @@ plugins_dir=${HOME}/.claude/plugins
 	printf 'yarn\t%s\n' "$(version_of yarn --version)"
 	printf 'typescript\t%s\n' "$(version_of tsc --version)"
 	printf 'typescript-language-server\t%s\n' "$(version_of typescript-language-server --version)"
+	printf 'Playwright\t%s\n' "$(version_of playwright --version)"
 	printf 'csharp-ls\t%s\n' "$(dotnet tool list --global 2>/dev/null | awk '$1 == "csharp-ls" { print $2 }')"
 	for tool in gh glab yq actionlint hadolint shellcheck shfmt terraform plannotator uv ansible ansible-lint; do
 		name=$tool

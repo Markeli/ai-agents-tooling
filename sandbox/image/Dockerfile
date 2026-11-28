@@ -10,7 +10,7 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 # Every input is pinned; Renovate reads the "# renovate:" comments (custom managers in renovate.json).
 # .NET SDK channels are a deliberate, manual choice; dotnet-install.sh takes the latest patch of each.
-ARG DOTNET_CHANNELS="9.0 10.0"
+ARG DOTNET_CHANNELS="9.0 10.0 11.0"
 # renovate: datasource=gitlab-releases depName=gitlab-org/cli
 ARG GLAB_VERSION=1.133.0
 # renovate: datasource=node-version depName=node versioning=node
@@ -32,6 +32,8 @@ ARG TS_LS_VERSION=6.1.0
 # TypeScript 7 is the native compiler and ships no tsserver, which typescript-language-server needs
 # renovate: datasource=npm depName=typescript
 ARG TYPESCRIPT_VERSION=6.0.3
+# renovate: datasource=npm depName=playwright
+ARG PLAYWRIGHT_VERSION=1.65.1
 # renovate: datasource=npm depName=pnpm
 ARG PNPM_VERSION=12.23.0
 # renovate: datasource=npm depName=yarn packageName=@yarnpkg/cli-dist
@@ -66,6 +68,23 @@ ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 RUN corepack enable \
 	&& npm install -g "typescript@${TYPESCRIPT_VERSION}" "typescript-language-server@${TS_LS_VERSION}" \
 	&& npm cache clean --force
+
+# Playwright with its headless Chromium for checking web pages: the browser lives outside any home directory so a
+# project's own playwright of the same version finds it too, and NODE_PATH lets a one-off script require('playwright')
+# without an npm install. libnss3-tools gives certutil for trust-proxy-ca.sh (see the SessionStart hook).
+# The base image points global npm installs at NPM_CONFIG_PREFIX (/usr/local/share/npm-global).
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright \
+	NODE_PATH=${NPM_CONFIG_PREFIX}/lib/node_modules
+# --with-deps installs the browser's distro libraries, unpinned like the apt packages below
+# hadolint ignore=DL3008
+RUN export DEBIAN_FRONTEND=noninteractive \
+	&& npm install -g "playwright@${PLAYWRIGHT_VERSION}" \
+	&& playwright install --with-deps --only-shell chromium \
+	&& apt-get update \
+	&& apt-get install -y --no-install-recommends libnss3-tools \
+	&& chmod -R a+rX "${PLAYWRIGHT_BROWSERS_PATH}" \
+	&& npm cache clean --force \
+	&& rm -rf /var/lib/apt/lists/*
 
 # Versions track whatever Ubuntu 26.04 ships; pinning would break on base image bumps
 # hadolint ignore=DL3008
@@ -251,6 +270,7 @@ COPY rules/ /etc/claude-code/rules/
 COPY templates/ /etc/claude-code/templates/
 COPY statusline.sh /etc/claude-code/statusline.sh
 COPY inventory.sh /etc/claude-code/inventory.sh
+COPY trust-proxy-ca.sh /etc/claude-code/trust-proxy-ca.sh
 COPY watch-pr/ /etc/claude-code/watch-pr/
 
 # Image identity, set by CI (see .github/scripts/sandbox-image-plan.sh) and read by the bot and agent-sandbox.

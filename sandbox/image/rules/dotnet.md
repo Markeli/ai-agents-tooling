@@ -29,9 +29,9 @@
 - xUnit (or the framework the repository already uses), Moq, FluentAssertions; `Microsoft.AspNetCore.Mvc.Testing` for
   web apps; integration tests against real infrastructure with Testcontainers. Cover edge and concurrency cases.
 - Test projects target every .NET version the code supports. The sandbox has no .NET 8 runtime (`net8.0` targets
-  still build with the .NET 10 SDK, but their tests can't run): run tests for
-  `net9.0` and `net10.0` locally (`dotnet test --framework net10.0`, or `dotnet cake --target=Test --framework=net10.0`
-  in Curiosus repositories) and leave `net8.0` to CI. Say in the PR description which frameworks you ran.
+  still build with a newer SDK, but their tests can't run): run tests for
+  `net9.0`, `net10.0` and `net11.0` locally (`dotnet test --framework net10.0`, or
+  `dotnet cake --target=Test --framework=net10.0` in Curiosus repositories) and leave `net8.0` to CI. Say in the PR description which frameworks you ran.
 - A change is done when tests pass on all frameworks in CI, not only on the one you ran.
 - Never lower a coverage threshold to make a build pass; raise it when coverage grows.
 
