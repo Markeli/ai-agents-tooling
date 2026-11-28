@@ -1,3 +1,5 @@
+using AgentSandbox.Mcp;
+
 namespace AgentSandbox.Tests;
 
 public sealed class LauncherCommandTests
@@ -5,6 +7,7 @@ public sealed class LauncherCommandTests
 	private readonly StringWriter _output = new();
 	private readonly StringWriter _error = new();
 	private LauncherOptions? _options;
+	private GrafanaSetupOptions? _setup;
 
 	[Fact]
 	public async Task Defaults_to_the_current_directory_and_no_flags()
@@ -116,7 +119,7 @@ public sealed class LauncherCommandTests
 	public async Task Prints_a_launcher_error_with_the_tool_prefix_and_returns_its_exit_code()
 	{
 		var exitCode = await LauncherCommand.InvokeAsync(
-			[], (_, _) => throw new LauncherException("cannot start sandbox-app", 3), _output, _error, CancellationToken.None);
+			[], (_, _) => throw new LauncherException("cannot start sandbox-app", 3), NoSetup, _output, _error, CancellationToken.None);
 
 		exitCode.Should().Be(3);
 		_error.ToString().Should().Be("agent-sandbox: cannot start sandbox-app\n");
@@ -126,7 +129,7 @@ public sealed class LauncherCommandTests
 	public async Task Prints_nothing_for_an_error_another_program_already_reported()
 	{
 		var exitCode = await LauncherCommand.InvokeAsync(
-			[], (_, _) => throw LauncherException.ExitWith(128), _output, _error, CancellationToken.None);
+			[], (_, _) => throw LauncherException.ExitWith(128), NoSetup, _output, _error, CancellationToken.None);
 
 		exitCode.Should().Be(128);
 		_error.ToString().Should().BeEmpty();
@@ -136,7 +139,7 @@ public sealed class LauncherCommandTests
 	[MemberData(nameof(FileSystemErrors))]
 	public async Task Prints_a_file_system_error_as_a_message_instead_of_a_stack_trace(Exception exception)
 	{
-		var exitCode = await LauncherCommand.InvokeAsync([], (_, _) => throw exception, _output, _error, CancellationToken.None);
+		var exitCode = await LauncherCommand.InvokeAsync([], (_, _) => throw exception, NoSetup, _output, _error, CancellationToken.None);
 
 		exitCode.Should().Be(1);
 		_error.ToString().Should().Be($"agent-sandbox: {exception.Message}\n");
@@ -149,12 +152,94 @@ public sealed class LauncherCommandTests
 		new DirectoryNotFoundException("Could not find a part of the path '/missing/agent.sock'."),
 	];
 
+	[Fact]
+	public async Task Parses_mcp_setup_grafana_with_its_defaults()
+	{
+		(await InvokeAsync("mcp", "setup", "grafana", "--url", "https://grafana.example.com")).Should().Be(0);
+
+		_setup.Should().BeEquivalentTo(new GrafanaSetupOptions
+		{
+			Url = "https://grafana.example.com",
+			Name = "personal-grafana",
+			AgentItem = "agent/personal-grafana",
+			OwnerItem = null,
+		});
+		_options.Should().BeNull();
+	}
+
+	[Fact]
+	public async Task Parses_every_option_of_mcp_setup_grafana()
+	{
+		(await InvokeAsync(
+			"mcp", "setup", "grafana", "--url", "https://grafana.example.com", "--name", "grafana-2",
+			"--agent-item", "agent/grafana-2", "--owner-item", "owner/grafana-2"))
+			.Should().Be(0);
+
+		_setup.Should().BeEquivalentTo(new GrafanaSetupOptions
+		{
+			Url = "https://grafana.example.com",
+			Name = "grafana-2",
+			AgentItem = "agent/grafana-2",
+			OwnerItem = "owner/grafana-2",
+		});
+	}
+
+	[Theory]
+	[InlineData("mcp", "setup", "grafana")]
+	[InlineData("mcp", "setup", "grafana", "--url")]
+	[InlineData("mcp", "setup", "grafana", "--url", "--name", "x")]
+	[InlineData("mcp", "setup", "grafana", "--url", "https://grafana.example.com", "--owner-item", "--name")]
+	[InlineData("mcp", "setup", "grafana", "--url", "https://grafana.example.com", "extra")]
+	[InlineData("mcp", "setup", "other", "--url", "https://grafana.example.com")]
+	public async Task Rejects_malformed_mcp_setup_command_lines_without_running(params string[] args)
+	{
+		(await InvokeAsync(args)).Should().NotBe(0);
+
+		_error.ToString().Should().NotBeEmpty();
+		_setup.Should().BeNull();
+		_options.Should().BeNull();
+	}
+
+	[Fact]
+	public async Task Rejects_agent_arguments_for_mcp_setup()
+	{
+		(await InvokeAsync("mcp", "setup", "grafana", "--url", "https://grafana.example.com", "--", "-c")).Should().Be(1);
+
+		_error.ToString().Should().Be("agent-sandbox: arguments after -- are only for the agent, not for mcp setup\n");
+		_setup.Should().BeNull();
+	}
+
+	[Fact]
+	public async Task Takes_a_directory_named_mcp_written_as_a_path()
+	{
+		(await InvokeAsync("./mcp")).Should().Be(0);
+
+		_options!.RepoPath.Should().Be("./mcp");
+		_setup.Should().BeNull();
+	}
+
+	[Fact]
+	public async Task Help_lists_the_mcp_command()
+	{
+		(await InvokeAsync("help")).Should().Be(0);
+
+		_output.ToString().Should().Contain("mcp").And.Contain("./mcp");
+	}
+
+	private static Task<int> NoSetup(GrafanaSetupOptions options, CancellationToken cancellationToken) =>
+		throw new InvalidOperationException("mcp setup must not run");
+
 	private Task<int> InvokeAsync(params string[] args) =>
 		LauncherCommand.InvokeAsync(
 			args,
 			(options, _) =>
 			{
 				_options = options;
+				return Task.FromResult(0);
+			},
+			(setup, _) =>
+			{
+				_setup = setup;
 				return Task.FromResult(0);
 			},
 			_output,

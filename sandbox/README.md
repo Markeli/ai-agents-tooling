@@ -18,7 +18,8 @@ sandbox/
 │   ├── rules/              topic rules the entry point tells the bot to read on demand
 │   └── templates/          spec and ADR templates (/etc/claude-code/templates)
 ├── kits/markeli-claude/    v3 mixin for sbx's claude kit: network rules, bot ssh-agent, Plannotator port, gitlab credential
-└── cli/                    agent-sandbox launcher: a .NET global tool (Cake build) with the kits embedded
+└── cli/                    agent-sandbox launcher: a .NET global tool (Cake build) with the kits embedded, plus
+                            mcp setup for host MCP servers (scripts from plugins/mcp-servers embedded)
     └── CHANGELOG.md        launcher version and release notes, kit changes included
 ```
 
@@ -219,6 +220,7 @@ agent-sandbox . -- -c                            # pass extra Claude Code args
 agent-sandbox --no-attach ~/Development/Personal/<repo>   # create/ensure, don't attach
 agent-sandbox --recreate ~/Development/Personal/<repo>    # see "Update or recreate a sandbox"
 agent-sandbox help                                       # all options (same as --help)
+agent-sandbox mcp setup grafana --url https://grafana.example.com   # see "MCP servers on the host"
 ```
 
 The first run asks to approve the kit's credentials (`anthropic`, `github`, `gitlab`); approvals are stored in
@@ -262,6 +264,24 @@ remote, `--no-attach`, and attach. Each named sandbox is its own independent clo
 remote on the host (see "Update or recreate a sandbox"); use a separate branch per sandbox so they don't push over
 each other.
 
+## MCP servers on the host
+
+MCP servers run on the Mac and reach the sandboxes through the sbx MCP gateway; their tokens stay in the Keychain
+([ADR 0005](../docs/adr/0005-connect-agents-to-grafana-through-the-sbx-mcp-gateway.md)). An agent in a sandbox finds a
+registered server with `mcp-find` and attaches it with `mcp-add`. The launcher sets up Grafana's:
+
+```bash
+agent-sandbox mcp setup grafana --url https://grafana.example.com [--owner-item owner/personal-grafana]
+```
+
+It installs `keychain-env` and `grafana-mcp` from [`plugins/mcp-servers`](../plugins/mcp-servers) (embedded in the
+tool, written to `~/.local/share/agent-sandbox/mcp/<tool version>/` and linked from `~/.local/bin`), registers
+`personal-grafana` in sbx with the bot's Keychain item `agent/personal-grafana` and, with `--owner-item`, in Claude Code
+with the owner's, and prints the steps left by hand (tokens, Claude Desktop, Grafana settings). It is idempotent; run it
+again after installing a new launcher version. Details, the tool policy and the manual steps:
+[`plugins/mcp-servers/grafana`](../plugins/mcp-servers/grafana/README.md). A repository directory named `mcp` is
+written `./mcp`, like `./help`.
+
 ## Launcher development
 
 [ADR 0003](../docs/adr/0003-port-agent-sandbox-to-a-dotnet-tool.md) explains why the launcher is a .NET tool. The code
@@ -276,8 +296,9 @@ dotnet cake --target=Format    # dotnet format --verify-no-changes
 dotnet cake --target=Install   # pack and (re)install the global tool
 ```
 
-A change to the launcher or a kit bumps `<Version>` in `cli/src/AgentSandbox/AgentSandbox.csproj` (SemVer) and adds
-its notes as a new first section of [`cli/CHANGELOG.md`](cli/CHANGELOG.md); `dotnet cake` fails when the two differ.
+A change to the launcher, a kit or a script in `plugins/mcp-servers` (all embedded in the tool) bumps `<Version>` in
+`cli/src/AgentSandbox/AgentSandbox.csproj` (SemVer) and adds its notes as a new first section of
+[`cli/CHANGELOG.md`](cli/CHANGELOG.md); `dotnet cake` fails when the two differ.
 The image has its own version and CHANGELOG (see Image versioning).
 
 ## Image versioning

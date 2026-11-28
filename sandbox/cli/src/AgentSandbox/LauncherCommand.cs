@@ -1,10 +1,12 @@
 using System.CommandLine;
+using AgentSandbox.Mcp;
 
 namespace AgentSandbox;
 
 /// <summary>
 /// The command line: <c>agent-sandbox [--no-attach] [--recreate] [--yes] [--force-pull] [--name NAME] [REPO_PATH] [-- AGENT_ARGS]</c>,
-/// plus <c>agent-sandbox help</c>; turns it into <see cref="LauncherOptions"/> and runs the launcher.
+/// plus <c>agent-sandbox help</c> and <c>agent-sandbox mcp setup grafana --url URL [...]</c>; turns it into
+/// <see cref="LauncherOptions"/> and runs the launcher, or into <see cref="GrafanaSetupOptions"/> and runs the setup.
 /// </summary>
 internal sealed class LauncherCommand
 {
@@ -42,7 +44,7 @@ internal sealed class LauncherCommand
 
 	private readonly Argument<string> _repo = new("REPO_PATH")
 	{
-		Description = "The repository, or a directory inside it (write ./help for a directory named help)",
+		Description = "The repository, or a directory inside it (write ./help or ./mcp for a directory named help or mcp)",
 		Arity = ArgumentArity.ZeroOrOne,
 		DefaultValueFactory = _ => ".",
 	};
@@ -51,6 +53,7 @@ internal sealed class LauncherCommand
 
 	private LauncherCommand(
 		Func<LauncherOptions, CancellationToken, Task<int>> run,
+		Func<GrafanaSetupOptions, CancellationToken, Task<int>> setupGrafana,
 		IReadOnlyList<string> agentArguments,
 		TextWriter output)
 	{
@@ -60,6 +63,7 @@ internal sealed class LauncherCommand
 			+ "Arguments after -- go to the agent.")
 		{
 			_noAttach, _recreate, _yes, _forcePull, _name, _repo, CreateHelpCommand(output),
+			CreateMcpCommand(setupGrafana, agentArguments),
 		};
 		_root.SetAction((result, cancellationToken) => run(ToOptions(result, agentArguments), cancellationToken));
 	}
@@ -74,6 +78,7 @@ internal sealed class LauncherCommand
 	public static async Task<int> InvokeAsync(
 		string[] args,
 		Func<LauncherOptions, CancellationToken, Task<int>> run,
+		Func<GrafanaSetupOptions, CancellationToken, Task<int>> setupGrafana,
 		TextWriter output,
 		TextWriter error,
 		CancellationToken cancellationToken)
@@ -82,7 +87,7 @@ internal sealed class LauncherCommand
 		var own = separator < 0 ? args : args[..separator];
 		var agentArguments = separator < 0 ? [] : args[(separator + 1)..];
 
-		var command = new LauncherCommand(run, agentArguments, output);
+		var command = new LauncherCommand(run, setupGrafana, agentArguments, output);
 
 		// A repository path starting with @ is a path, not a response file
 		var parsed = command._root.Parse(own, new ParserConfiguration { ResponseFileTokenReplacer = null });
@@ -155,6 +160,75 @@ internal sealed class LauncherCommand
 				result.AddError($"unknown option '{value}' (write ./{value} for a path)");
 			}
 		});
+	}
+
+	private static void RejectOptionAsValue(Option<string> option) =>
+		option.Validators.Add(result =>
+		{
+			if (result.Tokens.FirstOrDefault()?.Value is { } value && value.StartsWith('-'))
+			{
+				result.AddError($"{option.Name} needs a value, got the option '{value}'");
+			}
+		});
+
+	// agent-sandbox mcp setup grafana: a subcommand like help, so a repository directory named mcp is written ./mcp
+	private static Command CreateMcpCommand(
+		Func<GrafanaSetupOptions, CancellationToken, Task<int>> setupGrafana,
+		IReadOnlyList<string> agentArguments)
+	{
+		var url = new Option<string>("--url")
+		{
+			Description = "The Grafana base URL, e.g. https://grafana.example.com",
+			Required = true,
+		};
+		var name = new Option<string>("--name")
+		{
+			Description = "The server's name in sbx and Claude Code",
+			DefaultValueFactory = _ => GrafanaSetupOptions.DefaultName,
+		};
+		var agentItem = new Option<string>("--agent-item")
+		{
+			Description = "Keychain item with the bot's service account token, for the sandboxes",
+			DefaultValueFactory = _ => GrafanaSetupOptions.DefaultAgentItem,
+		};
+		var ownerItem = new Option<string>("--owner-item")
+		{
+			Description = "Keychain item with the owner's token; registers the server in Claude Code too",
+		};
+		foreach (var option in new[] { url, name, agentItem, ownerItem })
+		{
+			RejectOptionAsValue(option);
+		}
+
+		var grafana = new Command(
+			"grafana",
+			"Install grafana-mcp and keychain-env into ~/.local/bin and register the server in sbx (bot's token) and, "
+			+ "with --owner-item, in Claude Code; prints what is left to do by hand")
+		{
+			url, name, agentItem, ownerItem,
+		};
+		grafana.SetAction((result, cancellationToken) =>
+		{
+			if (agentArguments.Count > 0)
+			{
+				throw new LauncherException("arguments after -- are only for the agent, not for mcp setup");
+			}
+
+			return setupGrafana(
+				new GrafanaSetupOptions
+				{
+					Url = result.GetRequiredValue(url),
+					Name = result.GetRequiredValue(name),
+					AgentItem = result.GetRequiredValue(agentItem),
+					OwnerItem = result.GetValue(ownerItem),
+				},
+				cancellationToken);
+		});
+
+		return new Command("mcp", "MCP servers on this Mac that sandboxes reach through the sbx MCP gateway")
+		{
+			new Command("setup", "Install and register an MCP server") { grafana },
+		};
 	}
 
 	// The same text as --help, for people who type the command first

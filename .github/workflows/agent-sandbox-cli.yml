@@ -1,18 +1,21 @@
 name: agent-sandbox-cli
 
 # Builds, tests and packs the agent-sandbox .NET tool with its Cake script, and checks its formatting
-# (docs/adr/0003-port-agent-sandbox-to-a-dotnet-tool.md). The kit is embedded in the tool, so kit changes run it too.
+# (docs/adr/0003-port-agent-sandbox-to-a-dotnet-tool.md). The kits and the MCP server launchers are embedded in the
+# tool, so their changes run it too.
 on:
   push:
     branches: [main]
     paths:
       - sandbox/cli/**
       - sandbox/kits/**
+      - plugins/mcp-servers/**
       - .github/workflows/agent-sandbox-cli.yml
   pull_request:
     paths:
       - sandbox/cli/**
       - sandbox/kits/**
+      - plugins/mcp-servers/**
       - .github/workflows/agent-sandbox-cli.yml
   workflow_dispatch:
 

@@ -8,8 +8,8 @@
 		<PackAsTool>true</PackAsTool>
 		<ToolCommandName>agent-sandbox</ToolCommandName>
 		<PackageId>AgentSandbox</PackageId>
-		<Version>0.1.2</Version>
-		<Description>Launcher for Docker Sandboxes (sbx): creates a clone-mode sandbox for a git repository once — bot SSH agent, keychain-backed secrets and an embedded sbx kit — then attaches to the coding agent running in it as the markeli-agent bot.</Description>
+		<Version>0.2.0</Version>
+		<Description>Launcher for Docker Sandboxes (sbx): creates a clone-mode sandbox for a git repository once — bot SSH agent, keychain-backed secrets and an embedded sbx kit — then attaches to the coding agent running in it as the markeli-agent bot; also sets up host MCP servers for sandboxes (mcp setup grafana).</Description>
 		<RollForward>Major</RollForward>
 		<!-- The informational version names the directory the kits are written to: 0.1.0, not 0.1.0+<commit> -->
 		<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
@@ -27,6 +27,11 @@
 			Include="../../../kits/*/**"
 			Exclude="../../../kits/**/.DS_Store"
 			LogicalName="kits/%(RecursiveDir)%(Filename)%(Extension)"
+			WithCulture="false" />
+		<!-- The MCP server launchers agent-sandbox mcp setup installs on the host -->
+		<EmbeddedResource
+			Include="../../../../plugins/mcp-servers/keychain-env/keychain-env;../../../../plugins/mcp-servers/grafana/grafana-mcp"
+			LogicalName="mcp/%(Filename)%(Extension)"
 			WithCulture="false" />
 	</ItemGroup>
 

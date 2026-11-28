@@ -83,17 +83,28 @@ internal static class EmbeddedKits
 		return string.IsNullOrEmpty(xdg) ? Path.Combine(home, ".local", "share") : xdg;
 	}
 
-	// Written beside the kit, not inside it, where a launcher running in parallel would delete it as a stale file
-	private static async Task ReplaceAsync(
+	/// <summary>
+	/// Writes <paramref name="path"/> through a temporary file in <paramref name="temporaryDirectory"/> that is renamed
+	/// into place, so a reader sees either the old or the new file whole; <paramref name="mode"/> is set before the rename.
+	/// </summary>
+	/// <remarks>The temporary file goes beside the kit, not inside it, where a launcher running in parallel would delete
+	/// it as a stale file.</remarks>
+	internal static async Task ReplaceAsync(
 		string path,
 		byte[] content,
 		string temporaryDirectory,
-		CancellationToken cancellationToken)
+		CancellationToken cancellationToken,
+		UnixFileMode? mode = null)
 	{
 		var temporary = Path.Combine(temporaryDirectory, $".{Guid.NewGuid():N}.tmp");
 		try
 		{
 			await File.WriteAllBytesAsync(temporary, content, cancellationToken);
+			if (mode is { } unixMode && !OperatingSystem.IsWindows())
+			{
+				File.SetUnixFileMode(temporary, unixMode);
+			}
+
 			File.Move(temporary, path, overwrite: true);
 		}
 		finally
@@ -102,8 +113,9 @@ internal static class EmbeddedKits
 		}
 	}
 
-	// Housekeeping only: a directory that can't be removed now goes on the next run
-	private static void DeleteOtherVersions(string root)
+	/// <summary>Deletes every directory beside <paramref name="root"/>: those of other tool versions.</summary>
+	/// <remarks>Housekeeping only: a directory that can't be removed now goes on the next run.</remarks>
+	internal static void DeleteOtherVersions(string root)
 	{
 		foreach (var other in Directory.GetDirectories(Path.GetDirectoryName(root)!).Where(d => d != root))
 		{
@@ -123,7 +135,7 @@ internal static class EmbeddedKits
 			.Where(n => n.StartsWith(ResourcePrefix, StringComparison.Ordinal))
 			.Select(n => (n, n[ResourcePrefix.Length..].Replace('\\', '/')));
 
-	private static async Task<byte[]> ReadResourceAsync(string resource, CancellationToken cancellationToken)
+	internal static async Task<byte[]> ReadResourceAsync(string resource, CancellationToken cancellationToken)
 	{
 		await using var stream = typeof(EmbeddedKits).Assembly.GetManifestResourceStream(resource)!;
 		using var buffer = new MemoryStream();
