@@ -8,7 +8,7 @@ agent is forwarded.
 ```text
 sandbox/
 ├── image/                  template image (ghcr.io/markeli/claude-sandbox), built by CI
-│   ├── Dockerfile          .NET 9/10, Node.js LTS, glab, Plannotator, skills, plugins, bot git identity
+│   ├── Dockerfile          .NET 9/10/11, Node.js LTS, glab, Plannotator, skills, plugins, bot git identity
 │   ├── CHANGELOG.md        image version and release notes (see Image versioning)
 │   ├── inventory.sh        lists the toolchain with versions (/etc/claude-code/inventory.sh)
 │   ├── managed-settings.json  plugins, commit/PR attribution, Remote Control, claude.ai connectors off
@@ -24,7 +24,7 @@ sandbox/
 
 ## Toolchain in the image
 
-- **.NET**: 9.0, 10.0 SDKs (no .NET 8: `net8.0` tests run in CI only), `csharp-ls` (global dotnet tool,
+- **.NET**: 9.0, 10.0, 11.0 SDKs (no .NET 8: `net8.0` tests run in CI only), `csharp-ls` (global dotnet tool,
   pinned by `CSHARP_LS_VERSION`)
 - **Node.js**: current LTS from NodeSource, with corepack enabled and `pnpm`/`yarn` pre-activated for the `agent`
   user (no download/prompt on first use) — builds Docusaurus and Astro sites with npm, pnpm or yarn;

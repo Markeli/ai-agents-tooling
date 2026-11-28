@@ -10,7 +10,7 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 # Every input is pinned; Renovate reads the "# renovate:" comments (custom managers in renovate.json).
 # .NET SDK channels are a deliberate, manual choice; dotnet-install.sh takes the latest patch of each.
-ARG DOTNET_CHANNELS="9.0 10.0"
+ARG DOTNET_CHANNELS="9.0 10.0 11.0"
 # renovate: datasource=gitlab-releases depName=gitlab-org/cli
 ARG GLAB_VERSION=1.130.0
 # renovate: datasource=node-version depName=node versioning=node
