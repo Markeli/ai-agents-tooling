@@ -1,6 +1,6 @@
 # Grafana for agents through mcp-grafana and the sbx MCP gateway
 
-- Status: Approved
+- Status: Implemented
 - Date: 2026-11-28
 - ADRs: [0005](../adr/0005-connect-agents-to-grafana-through-the-sbx-mcp-gateway.md) (introduced)
 
