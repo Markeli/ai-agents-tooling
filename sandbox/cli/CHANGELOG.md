@@ -4,6 +4,23 @@ All notable changes to the `agent-sandbox` launcher (the `AgentSandbox` .NET too
 format follows [Keep a Changelog](https://keepachangelog.com) and versions follow [SemVer](https://semver.org). The
 first `## [x.y.z]` section must match `<Version>` in `src/AgentSandbox/AgentSandbox.csproj`: `dotnet cake` checks it.
 
+## [0.2.0] - 2026-11-28
+
+### Added
+
+- `agent-sandbox mcp setup grafana --url <url> [--name personal-grafana] [--agent-item agent/personal-grafana]
+  [--owner-item <item>]` sets up Grafana's mcp-grafana on the Mac for the sandboxes (through the sbx MCP gateway) and
+  the owner's Claude Code (docs/specs/2026-11-28-grafana-mcp.md, ADR 0005). It writes the embedded `keychain-env` and
+  `grafana-mcp` (`plugins/mcp-servers/`) to `~/.local/share/agent-sandbox/mcp/<tool version>/` and links them from
+  `~/.local/bin`, checks that `mcp-grafana` and the Keychain items exist (never reading a token), registers the server
+  in sbx with the bot's item and, with `--owner-item`, in Claude Code with the owner's, and prints what is left by
+  hand: creating the tokens, the Claude Desktop entry, the Grafana server settings. Running it again changes nothing;
+  a registration with other arguments is replaced. Exit 1 while a required step is missing.
+
+### Changed
+
+- `mcp` is a subcommand like `help`: write a repository directory named `mcp` as `./mcp`.
+
 ## [0.1.2] - 2026-11-14
 
 ### Fixed

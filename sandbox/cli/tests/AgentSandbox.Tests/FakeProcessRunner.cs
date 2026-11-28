@@ -2,10 +2,14 @@ using AgentSandbox.Processes;
 
 namespace AgentSandbox.Tests;
 
-/// <summary>Answers commands by their exact command line and records every call; an unexpected command fails the test.</summary>
+/// <summary>
+/// Answers commands by their exact command line, else by a program's handler (<see cref="OnProgram"/>), and records every
+/// call; an unexpected command fails the test.
+/// </summary>
 internal sealed class FakeProcessRunner : IProcessRunner
 {
 	private readonly Dictionary<string, Func<ProcessSpec, ProcessResult>> _handlers = [];
+	private readonly Dictionary<string, Func<ProcessSpec, ProcessResult?>> _programs = [];
 
 	public List<(ProcessSpec Spec, bool Interactive)> Calls { get; } = [];
 
@@ -14,6 +18,13 @@ internal sealed class FakeProcessRunner : IProcessRunner
 	public FakeProcessRunner On(string commandLine, Func<ProcessSpec, ProcessResult> handler)
 	{
 		_handlers[commandLine] = handler;
+		return this;
+	}
+
+	/// <summary>Answers any call of <paramref name="program"/> without an exact handler; null means unexpected.</summary>
+	public FakeProcessRunner OnProgram(string program, Func<ProcessSpec, ProcessResult?> handler)
+	{
+		_programs[program] = handler;
 		return this;
 	}
 
@@ -31,8 +42,12 @@ internal sealed class FakeProcessRunner : IProcessRunner
 	private ProcessResult Handle(ProcessSpec spec, bool interactive)
 	{
 		Calls.Add((spec, interactive));
-		return _handlers.TryGetValue(spec.CommandLine, out var handler)
-			? handler(spec)
-			: throw new InvalidOperationException($"unexpected command: {spec.CommandLine}");
+		if (_handlers.TryGetValue(spec.CommandLine, out var handler))
+		{
+			return handler(spec);
+		}
+
+		return (_programs.TryGetValue(spec.FileName, out var program) ? program(spec) : null)
+			?? throw new InvalidOperationException($"unexpected command: {spec.CommandLine}");
 	}
 }

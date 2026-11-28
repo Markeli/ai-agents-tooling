@@ -37,6 +37,11 @@ Personal monorepo for AI agent tooling: skills, MCP servers, Claude plugins, sys
   and any sandbox creation run on the owner's host.
 - `watch-pr` skill (`skills/claude-code/watch-pr`): tests are `tests/run.sh` there (stub `gh`/`glab` answering from
   numbered fixture files, `--once` runs; `WATCH_PR_POLLS`/`WATCH_PR_TRACE`/`WATCH_PR_SLEEP` are test hooks).
+- MCP server launchers (`plugins/mcp-servers/`): tests are `<server>/tests/run.sh` (stub `security` answering from
+  fixture files, stub `mcp-grafana` printing its arguments; `grafana/tests` reuses keychain-env's `security` stub).
+  `agent-sandbox` embeds `keychain-env` and `grafana-mcp`, so a change to them also needs a launcher version bump and
+  CHANGELOG entry. The format of `sbx mcp inspect --json` is undocumented and unchecked (no `sbx` here): the setup
+  re-registers when it can't confirm the arguments; `claude mcp get`'s text was checked with Claude Code 2.1.
 - In the sandbox, shellcheck dies with `commitBuffer: invalid argument` on files with emoji unless the locale is
   UTF-8: run `LC_ALL=C.UTF-8 shellcheck -x ...`.
 - `renovate --platform=local --dry-run=extract` (via `npx --package renovate@<version> --`) only sees git-tracked

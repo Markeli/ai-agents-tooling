@@ -1,0 +1,48 @@
+name: mcp-servers
+
+# Tests and lints the MCP server launchers in plugins/mcp-servers (docs/specs/2026-11-28-grafana-mcp.md). They run on
+# macOS hosts; the tests stub macOS security and mcp-grafana, so they run here on Linux. agent-sandbox-cli.yml also
+# runs on these paths, since the tool embeds the scripts.
+on:
+  push:
+    branches: [main]
+    paths:
+      - plugins/mcp-servers/**
+      - .github/workflows/mcp-servers.yml
+  pull_request:
+    paths:
+      - plugins/mcp-servers/**
+      - .github/workflows/mcp-servers.yml
+  workflow_dispatch:
+
+concurrency:
+  group: mcp-servers-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Test keychain-env
+        run: plugins/mcp-servers/keychain-env/tests/run.sh
+
+      - name: Test grafana-mcp
+        run: plugins/mcp-servers/grafana/tests/run.sh
+
+      - name: shellcheck
+        run: >-
+          shellcheck -x plugins/mcp-servers/keychain-env/keychain-env plugins/mcp-servers/grafana/grafana-mcp
+          plugins/mcp-servers/*/tests/run.sh plugins/mcp-servers/*/tests/stubs/*
+
+      - name: actionlint
+        uses: docker://rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
+        with:
+          args: -color .github/workflows/mcp-servers.yml
