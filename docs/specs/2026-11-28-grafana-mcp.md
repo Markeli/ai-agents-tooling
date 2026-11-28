@@ -85,7 +85,8 @@ Functional:
       that keep data inside Grafana (`GF_SNAPSHOTS_EXTERNAL_ENABLED=false`, `GF_PUBLIC_DASHBOARDS_ENABLED=false`); that
       sandboxes attach the server themselves (`mcp-find`/`mcp-add`); how to check it (questions to ask an agent).
    `mcp` becomes a subcommand like `help`: a repository directory named `mcp` is passed as `./mcp`.
-4. README of `grafana`: what the command does and the same steps by hand; the tool table (what is on, what is
+4. README of `grafana`: what the command does and what it leaves to the owner (tokens, Claude
+   Desktop, Grafana settings), with no manual install of the scripts; the tool table (what is on, what is
    deliberately off: data source writes, deleting dashboards and folders, other categories) and why Editor; that a
    dashboard edit through the API lasts until Grafana restarts or the dashboard's provisioned file changes, so keep it
    by committing the JSON where dashboards are provisioned from; that alerting created through the API lives in

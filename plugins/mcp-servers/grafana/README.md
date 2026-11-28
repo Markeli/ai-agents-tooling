@@ -42,7 +42,9 @@ step is missing. It:
 
 An existing registration with other arguments is replaced, one with the same arguments is left as it is.
 
-### The same by hand
+### What the command leaves to you
+
+The command installs the scripts and registers the server; it can't issue tokens or edit other apps' settings.
 
 1. Tokens. In Grafana: Administration → Users and access → Service accounts → Add service account, one per client
    (the bot and the owner, so they can be revoked separately), role **Editor** → Add service account token (expiry:
@@ -56,23 +58,7 @@ An existing registration with other arguments is replaced, one with the same arg
 
    On the first start macOS asks whether `security` may read the item: choose "Always Allow".
 
-2. Scripts, from a checkout of this repository:
-
-   ```bash
-   mkdir -p ~/.local/bin
-   install -m 0755 plugins/mcp-servers/keychain-env/keychain-env plugins/mcp-servers/grafana/grafana-mcp ~/.local/bin/
-   ```
-
-3. Registrations (full paths: the gateway and the clients don't expand `~`):
-
-   ```bash
-   sbx mcp add personal-grafana --command "$HOME/.local/bin/grafana-mcp" \
-     --args https://grafana.example.com,agent/personal-grafana
-   claude mcp add --scope user personal-grafana -- \
-     "$HOME/.local/bin/grafana-mcp" https://grafana.example.com owner/personal-grafana
-   ```
-
-4. Claude Desktop: add the server to `mcpServers` in
+2. Claude Desktop: add the server to `mcpServers` in
    `~/Library/Application Support/Claude/claude_desktop_config.json` and restart the app:
 
    ```json
@@ -82,7 +68,7 @@ An existing registration with other arguments is replaced, one with the same arg
    }
    ```
 
-5. Grafana server settings that keep data inside Grafana:
+3. Grafana server settings that keep data inside Grafana:
 
    ```ini
    GF_SNAPSHOTS_EXTERNAL_ENABLED=false
