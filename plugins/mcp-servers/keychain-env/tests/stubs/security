@@ -1,0 +1,18 @@
+#!/bin/sh
+# Stub of macOS security for the tests: "find-generic-password -s <item> -w" prints $KEYCHAIN_FIXTURES/<item>.
+# <item>.exit instead holds an exit code to fail with (e.g. 51 for a denied access). Every call is logged to
+# $KEYCHAIN_FIXTURES/calls, one argument per line.
+set -u
+printf '%s\n' "$@" -- >>"$KEYCHAIN_FIXTURES/calls"
+if [ "$#" != 4 ] || [ "$1" != find-generic-password ] || [ "$2" != -s ] || [ "$4" != -w ]; then
+	echo "security stub: unexpected $*" >&2
+	exit 99
+fi
+if [ -f "$KEYCHAIN_FIXTURES/$3.exit" ]; then
+	exit "$(cat "$KEYCHAIN_FIXTURES/$3.exit")"
+fi
+if [ ! -f "$KEYCHAIN_FIXTURES/$3" ]; then
+	echo "security: SecKeychainSearchCopyNext: The specified item could not be found in the keychain." >&2
+	exit 44
+fi
+cat "$KEYCHAIN_FIXTURES/$3"

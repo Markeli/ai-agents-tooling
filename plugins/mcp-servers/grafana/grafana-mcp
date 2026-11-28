@@ -1,0 +1,24 @@
+#!/bin/sh
+# grafana-mcp <grafana url> <keychain item>
+#
+# Runs mcp-grafana (stdio) against one Grafana with the service account token from a macOS Keychain item, read by
+# keychain-env. The tool policy lives here, not in the sbx or Claude registrations: sbx mcp add --args is a
+# comma-separated list, and the tool lists contain commas. See README.md for what is on and off, and why.
+set -u
+
+if [ "$#" != 2 ] || [ -z "$1" ] || [ -z "$2" ]; then
+	echo "usage: grafana-mcp <grafana url> <keychain item>" >&2
+	exit 2
+fi
+
+GRAFANA_URL=$1
+export GRAFANA_URL
+
+# The process the sbx gateway or Claude Desktop starts may lack the user's PATH
+PATH="${HOME:-}/.local/bin:/opt/homebrew/bin:/usr/local/bin:${PATH:-/usr/bin:/bin}"
+export PATH
+
+exec keychain-env GRAFANA_SERVICE_ACCOUNT_TOKEN="$2" -- mcp-grafana \
+	--disable-write \
+	--enabled-tools search,datasource,prometheus,loki,dashboard,folder,navigation,alerting,annotations,snapshot \
+	--enable-write-tools update_dashboard,create_folder,alerting_rules_write,alerting_manage_routing,alerting_routing_write,alerting_silences_write,create_annotation,update_annotation,delete_annotation,create_snapshot,delete_snapshot

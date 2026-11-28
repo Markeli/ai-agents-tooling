@@ -1,0 +1,5 @@
+#!/bin/sh
+# Stub of mcp-grafana for the tests: prints its arguments (one per line), then GRAFANA_URL and the token variable.
+printf 'arg: %s\n' "$@"
+printf 'GRAFANA_URL=%s\n' "${GRAFANA_URL-unset}"
+printf 'GRAFANA_SERVICE_ACCOUNT_TOKEN=%s\n' "${GRAFANA_SERVICE_ACCOUNT_TOKEN-unset}"

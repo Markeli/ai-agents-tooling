@@ -1,0 +1,74 @@
+#!/bin/sh
+# keychain-env VAR=item [VAR=item ...] -- command [args...]
+#
+# Reads each macOS Keychain item (a generic password, by service name) into the environment variable VAR, then execs
+# the command. Meant as the command of a stdio MCP server, so its token lives only in the Keychain: never in a config
+# file, never in a process's arguments (export is a shell builtin), never in the output.
+# Exit codes: 2 usage, 1 an item can't be read; otherwise the command's own.
+set -u
+
+prog=keychain-env
+
+usage() {
+	echo "usage: $prog VAR=item [VAR=item ...] -- command [args...]" >&2
+	exit 2
+}
+
+# Checks the whole command line before reading anything: VAR=item pairs, then --, then a command
+pairs=0
+separator=0
+for arg in "$@"; do
+	if [ "$separator" = 1 ]; then
+		separator=2
+		break
+	fi
+	if [ "$arg" = "--" ]; then
+		separator=1
+		continue
+	fi
+	var=${arg%%=*}
+	item=${arg#*=}
+	case $arg in
+	*=*) ;;
+	*)
+		echo "$prog: expected VAR=item, got '$arg'" >&2
+		usage
+		;;
+	esac
+	case $var in
+	'' | [0-9]* | *[!A-Za-z0-9_]*)
+		echo "$prog: invalid variable name '$var'" >&2
+		usage
+		;;
+	esac
+	if [ -z "$item" ]; then
+		echo "$prog: empty keychain item for $var" >&2
+		usage
+	fi
+	pairs=$((pairs + 1))
+done
+if [ "$pairs" = 0 ] || [ "$separator" != 2 ]; then
+	usage
+fi
+
+while [ "$1" != "--" ]; do
+	var=${1%%=*}
+	item=${1#*=}
+	shift
+	# security prints the password and a newline; the command substitution drops the newline
+	if value=$(security find-generic-password -s "$item" -w 2>/dev/null); then
+		export "$var=$value"
+	else
+		status=$?
+		# 44 is errSecItemNotFound; anything else is usually access denied or a cancelled prompt
+		if [ "$status" = 44 ]; then
+			echo "$prog: keychain item $item not found" >&2
+		else
+			echo "$prog: cannot read keychain item $item (security exit $status; access denied?)" >&2
+		fi
+		exit 1
+	fi
+done
+shift
+
+exec "$@"
