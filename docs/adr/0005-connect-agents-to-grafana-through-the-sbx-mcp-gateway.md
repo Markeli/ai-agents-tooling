@@ -65,8 +65,7 @@ host (an `agent-sandbox` option, `sbx mcp load`). With a single server registere
 
 Chosen option: **option 1, with the gateway in dynamic mode**, because it is the supported sbx path, keeps tokens on
 the host, serves the sandbox and the owner's clients with one install, and needs only two scripts and a setup
-subcommand. Static mode waits
-until other MCP servers (e.g. work ones) are registered on the host.
+subcommand. Static mode waits until other MCP servers (e.g. work ones) are registered on the host.
 
 ## Consequences
 
