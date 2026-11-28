@@ -24,18 +24,19 @@ Any Grafana token reads every metric and log line, and the logs contain text fro
 - No token in the sandbox VM; on the Mac only in the Keychain.
 - No new public services.
 - One setup for the sandbox and for the owner's Claude Code / Desktop.
-- As little own code and as few image releases as possible.
+- As little own code and as few image releases as possible; setting up a Mac is one command.
 - Revoke the bot's and the owner's access separately.
 
 ## Considered options
 
 ### Option 1: mcp-grafana on the Mac, reaching sandboxes through the sbx gateway
 
-- Good: the sbx way; tokens stay on the host; no change to the image, the kit or `agent-sandbox`; one `brew upgrade`
-  updates every client; two service accounts, revoked separately.
+- Good: the sbx way; tokens stay on the host; no change to the image or the kit; one `brew upgrade` updates every
+  client; two service accounts, revoked separately. Two small scripts plus an `agent-sandbox mcp setup grafana`
+  subcommand that installs them (embedded like the kits) and registers the server make the host setup one command.
 - Bad: mcp-grafana runs on the host, outside the sandbox isolation: a bug in it triggered by an agent's input would
-  hit the Mac, not the VM (it only talks to the Grafana API, so the risk is small). Host setup follows a README rather
-  than being automated.
+  hit the Mac, not the VM (it only talks to the Grafana API, so the risk is small). Tokens are still issued in Grafana
+  and put into the Keychain by hand.
 
 ### Option 2: mcp-grafana in the sandbox image
 
@@ -63,13 +64,14 @@ host (an `agent-sandbox` option, `sbx mcp load`). With a single server registere
 ## Decision
 
 Chosen option: **option 1, with the gateway in dynamic mode**, because it is the supported sbx path, keeps tokens on
-the host, serves the sandbox and the owner's clients with one install, and needs almost no own code. Static mode waits
+the host, serves the sandbox and the owner's clients with one install, and needs only two scripts and a setup
+subcommand. Static mode waits
 until other MCP servers (e.g. work ones) are registered on the host.
 
 ## Consequences
 
-- Positive: the bot and the owner use Grafana without changes to the image or `agent-sandbox`; after a sandbox is
-  recreated the agent attaches the server by itself.
+- Positive: the bot and the owner use Grafana without changes to the image or to sandbox creation; after a sandbox is
+  recreated the agent attaches the server by itself; `agent-sandbox mcp setup` can take other servers later.
 - Negative: any agent in any sandbox on the host can attach any registered server; mcp-grafana runs outside the
   isolation; write access is limited by the Grafana role and the tool list, not by the sandbox.
 - Follow-ups: when other MCP servers are registered on the host, static mode and an `--mcp` option in `agent-sandbox`
